@@ -6,7 +6,7 @@ from app.services.mobility_option_service import MobilityOptionService
 from app.services.public_transport_service import PublicTransportService
 from app.services.route_service import RouteService
 from app.services.transport_service import TransportService
-
+from app.schemas.route_response import RouteOptionsResponse
 
 router = APIRouter(tags=["route options"])
 transport_service = TransportService()
@@ -28,7 +28,10 @@ route_service = RouteService(
 )
 
 
-@router.post("/route_options")
+@router.post(
+    "/route_options",
+    response_model=RouteOptionsResponse
+)
 def get_route_options(request: RouteOptionsRequest):
     start_station = public_transport_service.get_station_by_id(
         request.station_pair.start_station_id
