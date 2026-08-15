@@ -1,15 +1,19 @@
 from fastapi import APIRouter, HTTPException
+from app.services.time_service import TimeService
 
 from app.data.fake_db import stations, lines, trips, trip_stops
 from app.services.public_transport_service import PublicTransportService
 
 router = APIRouter(tags=["public transport"])
 
+time_service = TimeService()
+
 public_transport_service = PublicTransportService(
-    stations,
-    lines,
-    trips,
-    trip_stops
+    stations=stations,
+    lines=lines,
+    trips=trips,
+    trip_stops=trip_stops,
+    time_service=time_service
 )
 
 

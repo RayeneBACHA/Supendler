@@ -7,9 +7,11 @@ from app.services.public_transport_service import PublicTransportService
 from app.services.route_service import RouteService
 from app.services.transport_service import TransportService
 from app.schemas.route_response import RouteOptionsResponse
+from app.services.time_service import TimeService
 
 router = APIRouter(tags=["route options"])
 transport_service = TransportService()
+time_service = TimeService()
 
 mobility_option_service = MobilityOptionService(
     transport_service=transport_service
@@ -19,7 +21,8 @@ public_transport_service = PublicTransportService(
     stations=stations,
     lines=lines,
     trips=trips,
-    trip_stops=trip_stops
+    trip_stops=trip_stops,
+    time_service=time_service
 )
 
 route_service = RouteService(

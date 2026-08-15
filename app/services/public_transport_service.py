@@ -1,15 +1,19 @@
+from app.services.time_service import TimeService
+
 class PublicTransportService:
     def __init__(
         self,
         stations: list[dict],
         lines: list[dict],
         trips: list[dict],
-        trip_stops: list[dict]
+        trip_stops: list[dict],
+        time_service: TimeService
     ):
         self.stations = stations
         self.lines = lines
         self.trips = trips
         self.trip_stops = trip_stops
+        self.time_service = time_service
 
     def get_all_trips(self):
         return self.trips
@@ -85,6 +89,16 @@ class PublicTransportService:
             if from_stop["stop_order"] >= to_stop["stop_order"]:
                 continue
 
+            departure_time = self.get_stop_time(
+                trip,
+                from_stop
+            )
+
+            arrival_time = self.get_stop_time(
+                trip,
+                to_stop
+            )
+
             line = self.get_line_by_name(trip["line_name"])
 
             stops_between = []
@@ -97,7 +111,11 @@ class PublicTransportService:
                         "station_id": station["id"],
                         "station_name": station["name"],
                         "stop_order": stop["stop_order"],
-                        "minute": stop["minute"]
+                        "minute": stop["minute"],
+                        "scheduled_time": self.get_stop_time(
+                            trip,
+                            stop
+                        )
                     })
 
             duration_minutes = to_stop["minute"] - from_stop["minute"]
@@ -107,10 +125,38 @@ class PublicTransportService:
                 "line": line["name"],
                 "line_type": line["type"],
                 "destination": trip["destination"],
-                "from_station_id": from_station_id,
-                "to_station_id": to_station_id,
+
+                "departure_time": departure_time,
+                "arrival_time": arrival_time,
+
+
                 "duration_minutes": duration_minutes,
                 "stops": stops_between
             })
 
         return direct_trips
+
+    def get_stop_time(
+            self,
+            trip: dict,
+            stop: dict
+    ) -> str:
+        """
+        Calculate the scheduled clock time at a specific stop.
+
+        Each stop stores its time as an offset in minutes from the
+        beginning of the trip.
+        """
+
+        trip_start_minutes = self.time_service.time_to_minutes(
+            trip["start_time"]
+        )
+
+        stop_time_minutes = (
+            trip_start_minutes
+            + stop["minute"]
+        )
+
+        return self.time_service.minutes_to_time(
+            stop_time_minutes
+        )
