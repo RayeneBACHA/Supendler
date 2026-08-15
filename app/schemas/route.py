@@ -26,12 +26,12 @@ class SharedBikeAvailability(BaseModel):
     available_count: int = Field(default=0, ge=0)
 
     nearest_vehicle_walk_distance_m: int | None = Field(
-        default=0,
+        default=None,
         ge=0
     )
 
     ride_distance_km: float | None = Field(
-        default=0,
+        default=None,
         ge=0
     )
 
