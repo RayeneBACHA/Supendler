@@ -229,3 +229,67 @@ class PublicTransportService:
                 catchable_trips.append(trip)
 
         return catchable_trips
+
+    def evaluate_direct_trip_access(
+        self,
+        from_station_id: int,
+        to_station_id: int,
+        ready_time: str,
+        travel_time_minutes: float,
+        safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+        """
+        Evaluate how a ground mobility option can reach direct
+        public transport trip.
+
+        The result keeps both cachable and missed trips so that other
+        routing logic can later compare mobility options.
+        """
+
+        direct_trips = self.find_direct_trips(
+            from_station_id,
+            to_station_id
+        )
+
+        evaluated_trips = []
+
+        for trip in direct_trips:
+
+            catchable = self.can_catch_departure(
+                ready_time=ready_time,
+                travel_time_minutes=travel_time_minutes,
+                departure_time=trip["departure_time"],
+                safety_buffer_minutes=safety_buffer_minutes
+            )
+
+            leave_by_time = self.time_service.calculate_leave_by_time(
+                departure_time=trip["departure_time"],
+                travel_time_minutes=travel_time_minutes,
+                safety_buffer_minutes=safety_buffer_minutes
+            )
+
+            ready_minutes = self.time_service.time_to_minutes(
+                ready_time
+            )
+
+            leave_by_minutes = self.time_service.time_to_minutes(
+                leave_by_time
+            )
+
+            wait_before_start_minutes = None
+
+            if catchable:
+                wait_before_start_minutes = max(
+                    0,
+                    leave_by_minutes - ready_minutes
+                )
+
+            evaluated_trips.append({
+                **trip,
+
+                "catchable": catchable,
+                "leave_by_time": leave_by_time,
+                "wait_before_start_minutes": wait_before_start_minutes
+            })
+
+        return evaluated_trips

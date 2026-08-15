@@ -1,3 +1,6 @@
+from math import ceil
+
+
 class TimeService:
 
     def time_to_minutes(self, time_string: str) -> int:
@@ -29,3 +32,35 @@ class TimeService:
         minutes = total_minutes % 60
 
         return f"{hours:02d}:{minutes:02d}"
+
+    def calculate_leave_by_time(
+        self,
+        departure_time: str,
+        travel_time_minutes: float,
+        safety_buffer_minutes: float = 0
+    ) -> str:
+        """
+        Calculate the latest time the user can start a ground segment
+        and still reach the scheduled departure safely.
+
+        Travel time and safety buffer are rounded up because leaving later 
+        could make the connection impossible.
+        """
+
+        departure_minutes = self.time_to_minutes(
+            departure_time
+        )
+
+        required_minutes = ceil(
+            travel_time_minutes
+            + safety_buffer_minutes
+        )
+
+        leave_by_minutes = (
+            departure_minutes
+            - required_minutes
+        )
+
+        return self.minutes_to_time(
+            leave_by_minutes
+        )
