@@ -160,3 +160,72 @@ class PublicTransportService:
         return self.time_service.minutes_to_time(
             stop_time_minutes
         )
+
+    def can_catch_departure(
+            self,
+            ready_time: str,
+            travel_time_minutes: float,
+            departure_time: str,
+            safety_buffer_minutes: float = 0
+    ) -> bool:
+        """
+        Check whether a user can reach a departure point
+        early enough to catch the scheduled public transport trip.
+
+        The safety buffer can later be increased for modes with 
+        more uncertainty, such as shared mobility 
+        """
+
+        ready_minutes = self.time_service.time_to_minutes(
+            ready_time
+        )
+
+        departure_minutes = self.time_service.time_to_minutes(
+            departure_time
+        )
+
+        arrival_at_station = (
+            ready_minutes
+            +travel_time_minutes
+        )
+
+        # The user must arrive before the latest safe arrival time,
+        # not merely before the vehicle has already departed.
+        latest_safe_arrival = (
+            departure_minutes
+            - safety_buffer_minutes
+        )
+
+        return arrival_at_station <= latest_safe_arrival
+
+
+    def find_catchable_direct_trips(
+            self,
+            from_station_id: int,
+            to_station_id: int,
+            ready_time: str,
+            travel_time_minutes: float,
+            safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+        """
+        Return only the direct public transport trips that the user
+        can actually reach before their scheduled departure.
+        """
+
+        direct_trips = self.find_direct_trips(
+            from_station_id,
+            to_station_id
+        )
+
+        catchable_trips = []
+
+        for trip in direct_trips:
+            if self.can_catch_departure(
+                ready_time=ready_time,
+                travel_time_minutes=travel_time_minutes,
+                departure_time=trip["departure_time"],
+                safety_buffer_minutes=safety_buffer_minutes
+            ):
+                catchable_trips.append(trip)
+
+        return catchable_trips

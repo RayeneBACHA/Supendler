@@ -114,7 +114,42 @@ class MobilitySegment(BaseModel):
     )
 
 
+class JourneyTime(BaseModel):
+    """
+    Describes when the user is ready to start the journey.
+    """
+
+    departure_time: str
+
+    @model_validator(mode="after")
+    def validate_departure_time(self):
+        try:
+            hours, minutes = map(
+                int,
+                self.departure_time.split(":")
+            )
+        except ValueError:
+            raise ValueError(
+                "departure_time must use HH:MM format"
+            )
+
+        if not 0 <= hours <= 23:
+            raise ValueError(
+                "Hour must be between 00 and 23"
+            )
+
+        if not 0 <= minutes <= 59:
+            raise ValueError(
+                "Minute must be between 00 and 59"
+            )
+
+        return self
+
+
+    
 class RouteOptionsRequest(BaseModel):
+    journey: JourneyTime
+
     station_pair: StationPair
     user: UserMobility
 
