@@ -293,3 +293,70 @@ class PublicTransportService:
             })
 
         return evaluated_trips
+
+    def find_unlocked_direct_trips(
+        self,
+        from_station_id: int,
+        to_station_id: int,
+        ready_time: str,
+        baseline_travel_time_minutes: float,
+        alternative_travel_time_minutes: float,
+        baseline_safety_buffer_minutes: float = 0,
+        alternative_safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+        """
+        Find public transport trips that are impossible to catch
+        with the baseline mobility option but become catchable with
+        the alternative mobility option.
+
+        Walking will normally be used as the baseline.
+        """
+
+        baseline_evaluation = self.evaluate_direct_trip_access(
+            from_station_id=from_station_id,
+            to_station_id=to_station_id,
+            ready_time=ready_time,
+            travel_time_minutes=baseline_travel_time_minutes,
+            safety_buffer_minutes=baseline_safety_buffer_minutes
+        )
+
+        alternative_evaluation = self.evaluate_direct_trip_access(
+            from_station_id=from_station_id,
+            to_station_id=to_station_id,
+            ready_time=ready_time,
+            travel_time_minutes=alternative_travel_time_minutes,
+            safety_buffer_minutes=alternative_safety_buffer_minutes
+        )
+
+        # Index the baseline results by trip ID so we can compare
+        # the same scheduled journey between both mobility options.
+        baseline_by_trip_id = {
+            trip["trip_id"]: trip
+            for trip in baseline_evaluation
+        }
+
+        unlocked_trips = []
+
+        for alternative_trip in alternative_evaluation:
+            baseline_trip = baseline_by_trip_id[
+                alternative_trip["trip_id"]
+            ]
+
+            if (
+                not baseline_trip["catchable"]
+                and alternative_trip["catchable"]
+            ):
+                unlocked_trips.append({
+                    **alternative_trip,
+
+                    "unlocks_connection": True,
+
+                    "baseline_access": {
+                        "catchable": baseline_trip["catchable"],
+                        "leave_by_time": baseline_trip["leave_by_time"],
+                        "wait_before_start_minutes":
+                            baseline_trip["wait_before_start_minutes"]
+                    }
+                })
+
+        return unlocked_trips
