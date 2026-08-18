@@ -35,6 +35,9 @@ class PublicTransportStop(BaseModel):
     stop_order: int = Field(gt=0)
     minute: int = Field(ge=0)
 
+    #Scheduled clock time at this stop
+    scheduled_time: str
+
 
 class PublicTransportLeg(BaseModel):
     leg_type: Literal["public_transport"] = "public_transport"
@@ -44,8 +47,11 @@ class PublicTransportLeg(BaseModel):
     line_type: str
     destination: str
 
-    duration_minutes: float = Field(ge=0)
+    # Actual scheduled times for this section of the trip.
+    departure_time: str
+    arrival_time: str
 
+    duration_minutes: float = Field(ge=0)
     stops: list[PublicTransportStop]
 
 class RouteOption(BaseModel):
@@ -55,8 +61,19 @@ class RouteOption(BaseModel):
     ]
 
     total_time_minutes: float = Field(ge=0)
-
     modes: list[str]
+
+    # Only relevant for timetable-dependent routes.
+    # Direct walk/bike/scooter routes can leave these as None.
+    leave_by_time: str | None = None
+    wait_before_start_minutes: float | None = Field(
+        default= None,
+        ge=0
+    )
+
+    # Later this can contain values such as "unlocks_connection" or "saves_walking_time".
+    benefit: str | None = None
+    
 
     legs: list[
         MobilityLeg | PublicTransportLeg

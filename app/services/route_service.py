@@ -103,6 +103,12 @@ class RouteService:
         trips: list[dict]
     ) -> list[dict]:
 
+        """
+        Build the walking-only public transport baseline.
+
+        A scheduled trip is only included if the user can reach its departure by walking.
+        """
+
         routes = []
 
         access_options = (
@@ -121,29 +127,40 @@ class RouteService:
             )
         )
 
-        for trip in trips:
+        walking_access = self._find_walking_option(
+            access_options
+        )
 
-            # Normal combinations:
-            # walk/shared bike/shared scooter
-            routes.extend(
-                self._combine_normal_options(
-                    access_options=access_options,
-                    egress_options=egress_options,
-                    trip=trip
-                )
+        walking_egress = self._find_walking_option(
+            egress_options
+        )
+
+        if walking_access is None or walking_egress is None:
+            return routes
+
+        evaluated_trips = self.public_transport_service.evaluate_direct_trip_access(
+            from_station_id=request.station_pair.start_station_id,
+            to_station_id=request.station_pair.end_station_id,
+            ready_time=request.journey.ready_time,
+            travel_time_minutes=walking_access["time_minutes"]
+        )
+
+        for trip in evaluated_trips:
+
+            # Missed departures must never become route candidates.
+            if not trip["catchable"]:
+                continue
+
+            route = self._create_public_transport_route(
+                access_option=walking_access,
+                trip=trip,
+                egress_option=walking_egress,
+                leave_by_time=trip["leave_by_time"],
+                wait_before_start_minutes=trip["wait_before_start_minutes"]
             )
 
-            # Folding bike combination
-            folding_bike_route = (
-                self._build_folding_bike_route(
-                    access_options=access_options,
-                    egress_options=egress_options,
-                    trip=trip
-                )
-            )
-
-            if folding_bike_route is not None:
-                routes.append(folding_bike_route)
+            routes.append(route)
+        
 
         return routes
 
@@ -229,7 +246,10 @@ class RouteService:
         self,
         access_option: dict,
         trip: dict,
-        egress_option: dict
+        egress_option: dict,
+        leave_by_time: str | None = None,
+        wait_before_start_minutes: float | None = None,
+        benefit: str | None = None
     ) -> dict:
 
         total_time = (
@@ -251,8 +271,10 @@ class RouteService:
             "line_type": trip["line_type"],
             "destination": trip["destination"],
 
-            "duration_minutes": trip["duration_minutes"],
+            "departure_time": trip["departure_time"],
+            "arrival_time": trip["arrival_time"],
 
+            "duration_minutes": trip["duration_minutes"],
             "stops": trip["stops"]
         }
 
@@ -273,6 +295,10 @@ class RouteService:
                 trip["line_type"],
                 egress_option["mode"]
             ],
+
+            "leave_by_time": leave_by_time,
+            "wait_before_start_minutes": wait_before_start_minutes,
+            "benefit": benefit,
 
             "legs": [
                 access_leg,
@@ -299,3 +325,17 @@ class RouteService:
 
             "actions": option["steps"]
         }
+
+    def _find_walking_option(
+            self,
+            options: list[dict]
+    ) -> dict | None:
+        """
+        Find the always-available walking option for a mobility segment.
+        """
+
+        for option in options:
+            if option["mode"] == "walk":
+                return option
+
+        return None
