@@ -104,9 +104,11 @@ class RouteService:
     ) -> list[dict]:
 
         """
-        Build the walking-only public transport baseline.
+        Build timetable-aware public transport routes.
 
-        A scheduled trip is only included if the user can reach its departure by walking.
+        Walking is the baseline mobility profile.
+        If the user has a folding bike, folding-bike access is evaluated 
+        against walking to detect departures that the bike unlocks.
         """
 
         routes = []
@@ -138,32 +140,97 @@ class RouteService:
         if walking_access is None or walking_egress is None:
             return routes
 
-        evaluated_trips = self.public_transport_service.evaluate_direct_trip_access(
+        #------------------------------------------------------------
+        # 1. Walking baseline
+        #------------------------------------------------------------
+
+        walking_trips = self.public_transport_service.evaluate_direct_trip_access(
             from_station_id=request.station_pair.start_station_id,
             to_station_id=request.station_pair.end_station_id,
             ready_time=request.journey.ready_time,
             travel_time_minutes=walking_access["time_minutes"]
         )
 
-        for trip in evaluated_trips:
+        for trip in walking_trips:
 
-            # Missed departures must never become route candidates.
             if not trip["catchable"]:
                 continue
 
-            route = self._create_public_transport_route(
-                access_option=walking_access,
-                trip=trip,
-                egress_option=walking_egress,
-                leave_by_time=trip["leave_by_time"],
-                wait_before_start_minutes=trip["wait_before_start_minutes"]
+            routes.append(
+                self._create_public_transport_route(
+                        access_option=walking_access,
+                        trip=trip,
+                        egress_option=walking_egress,
+                        leave_by_time=trip["leave_by_time"],
+                        wait_before_start_minutes=trip["wait_before_start_minutes"]
+                )
             )
 
-            routes.append(route)
-        
+        #------------------------------------------------------------
+        # 2. Folding-bike profile
+        #------------------------------------------------------------
+
+        if not request.user.has_folding_bike:
+            return routes
+
+        folding_bike_access = self._find_folding_bike_option(
+            access_options
+        )
+
+        folding_bike_egress = self._find_folding_bike_option(
+            egress_options
+        )
+
+        if folding_bike_access is None or folding_bike_egress is None:
+            return routes
+
+        bike_trips = self.public_transport_service.evaluate_direct_trip_access(
+            from_station_id=request.station_pair.start_station_id,
+            to_station_id=request.station_pair.end_station_id,
+            ready_time=request.journey.ready_time,
+            travel_time_minutes=folding_bike_access["time_minutes"]
+        )
+
+        unlocked_trips = (
+            self.public_transport_service.find_unlocked_direct_trips(
+                from_station_id=request.station_pair.start_station_id,
+                to_station_id=request.station_pair.end_station_id,
+                ready_time=request.journey.ready_time,
+                baseline_travel_time_minutes=walking_access["time_minutes"],
+                alternative_travel_time_minutes=folding_bike_access["time_minutes"]
+            )
+        )
+
+        unlocked_trips_ids = {
+            trip["trip_id"]
+            for trip in unlocked_trips
+        }
+
+        for trip in bike_trips:
+
+            if not trip["catchable"]:
+                continue
+
+            benefit = None
+
+            if trip["trip_id"] in unlocked_trips_ids:
+                benefit = "unlocks_connection"
+
+            routes.append(
+                self._create_public_transport_route(
+                    access_option=folding_bike_access,
+                    trip=trip,
+                    egress_option=folding_bike_egress,
+                    leave_by_time=trip["leave_by_time"],
+                    wait_before_start_minutes=trip[
+                        "wait_before_start_minutes"
+                    ],
+                    benefit=benefit
+                )
+            )
 
         return routes
-
+            
 
     def _combine_normal_options(
         self,
@@ -336,6 +403,20 @@ class RouteService:
 
         for option in options:
             if option["mode"] == "walk":
+                return option
+
+        return None
+
+    def _find_folding_bike_option(
+            self,
+            options: list[dict] 
+    ) -> dict | None:
+        """
+        Find the folding_bike option for a mobility segment.
+        """
+
+        for option in options:
+            if option["mode"] == "bike":
                 return option
 
         return None
