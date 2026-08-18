@@ -38,21 +38,11 @@ class RouteService:
         # 2. Public transport routes
         # -----------------------------------
 
-        public_transport_trips = (
-            self.public_transport_service.find_direct_trips(
-                request.station_pair.start_station_id,
-                request.station_pair.end_station_id
+        route_options.extend(
+            self._build_public_transport_routes(
+                request=request
             )
         )
-
-        if public_transport_trips:
-            route_options.extend(
-                self._build_public_transport_routes(
-                    request=request,
-                    trips=public_transport_trips
-                )
-            )
-
         # -----------------------------------
         # 3. Sort routes
         # -----------------------------------
@@ -103,7 +93,6 @@ class RouteService:
     def _build_public_transport_routes(
         self,
         request: RouteOptionsRequest,
-        trips: list[dict]
     ) -> list[dict]:
 
         """
@@ -235,70 +224,6 @@ class RouteService:
             )
 
         return routes
-            
-
-    def _combine_normal_options(
-        self,
-        access_options: list[dict],
-        egress_options: list[dict],
-        trip: dict
-    ) -> list[dict]:
-
-        routes = []
-
-        normal_access_options = [
-            option
-            for option in access_options
-            if option["source"] != "folding_bike"
-        ]
-
-        normal_egress_options = [
-            option
-            for option in egress_options
-            if option["source"] != "folding_bike"
-        ]
-
-        for access_option in normal_access_options:
-
-            for egress_option in normal_egress_options:
-
-                route = self._create_public_transport_route(
-                    access_option=access_option,
-                    trip=trip,
-                    egress_option=egress_option
-                )
-
-                routes.append(route)
-
-        return routes
-
-
-    def _build_folding_bike_route(
-        self,
-        access_options: list[dict],
-        egress_options: list[dict],
-        trip: dict
-    ) -> dict | None:
-
-        folding_bike_access = (
-            self._find_folding_bike_option(access_options)
-        )
-
-        folding_bike_egress = (
-            self._find_folding_bike_option(egress_options)
-        )
-
-        if (
-            folding_bike_access is None
-            or folding_bike_egress is None
-        ):
-            return None
-
-        return self._create_public_transport_route(
-            access_option=folding_bike_access,
-            trip=trip,
-            egress_option=folding_bike_egress
-        )
 
 
     def _find_folding_bike_option(
@@ -414,19 +339,6 @@ class RouteService:
 
         return None
 
-    def _find_folding_bike_option(
-            self,
-            options: list[dict] 
-    ) -> dict | None:
-        """
-        Find the folding_bike option for a mobility segment.
-        """
-
-        for option in options:
-            if option["mode"] == "bike":
-                return option
-
-        return None
 
     def _get_direct_route_profile(
             self,
