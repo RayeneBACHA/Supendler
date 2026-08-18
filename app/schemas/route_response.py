@@ -6,6 +6,8 @@ from app.schemas.route import SegmentRole
 from app.schemas.station import StationResponse
 from app.schemas.transport import TransportMode
 
+from enum import Enum
+
 class MobilityAction(BaseModel):
     action: str
 
@@ -54,11 +56,22 @@ class PublicTransportLeg(BaseModel):
     duration_minutes: float = Field(ge=0)
     stops: list[PublicTransportStop]
 
+class RouteProfile(str, Enum):
+    direct_walk = "direct_walk"
+    direct_bike = "direct_bike"
+    direct_shared = "direct_shared"
+
+    pt_walk = "pt_walk"
+    pt_folding_bike = "pt_folding_bike"
+    pt_shared = "pt_shared"
+
 class RouteOption(BaseModel):
     route_type: Literal[
         "direct",
         "public_transport_combo"
     ]
+
+    profile: RouteProfile
 
     total_time_minutes: float = Field(ge=0)
     modes: list[str]
@@ -71,7 +84,7 @@ class RouteOption(BaseModel):
         ge=0
     )
 
-    # Later this can contain values such as "unlocks_connection" or "saves_walking_time".
+    # This can contain values such as "unlocks_connection" or "saves_walking_time".
     benefit: str | None = None
     
 

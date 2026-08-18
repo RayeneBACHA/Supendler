@@ -1,7 +1,7 @@
 from app.schemas.route import RouteOptionsRequest, SegmentRole
 from app.services.mobility_option_service import MobilityOptionService
 from app.services.public_transport_service import PublicTransportService
-
+from app.schemas.route_response import RouteProfile
 
 class RouteService:
     def __init__(
@@ -78,10 +78,13 @@ class RouteService:
 
         for option in direct_options:
 
+            profile = self._get_direct_route_profile(option)
+
             mobility_leg = self._create_mobility_leg(option)
 
             routes.append({
                 "route_type": "direct",
+                "profile": profile,
 
                 "total_time_minutes": option["time_minutes"],
 
@@ -161,6 +164,7 @@ class RouteService:
                         access_option=walking_access,
                         trip=trip,
                         egress_option=walking_egress,
+                        profile=RouteProfile.pt_walk,
                         leave_by_time=trip["leave_by_time"],
                         wait_before_start_minutes=trip["wait_before_start_minutes"]
                 )
@@ -221,6 +225,7 @@ class RouteService:
                     access_option=folding_bike_access,
                     trip=trip,
                     egress_option=folding_bike_egress,
+                    profile=RouteProfile.pt_folding_bike,
                     leave_by_time=trip["leave_by_time"],
                     wait_before_start_minutes=trip[
                         "wait_before_start_minutes"
@@ -314,6 +319,7 @@ class RouteService:
         access_option: dict,
         trip: dict,
         egress_option: dict,
+        profile: RouteProfile,
         leave_by_time: str | None = None,
         wait_before_start_minutes: float | None = None,
         benefit: str | None = None
@@ -351,6 +357,7 @@ class RouteService:
 
         return {
             "route_type": "public_transport_combo",
+            "profile": profile,
 
             "total_time_minutes": round(
                 total_time,
@@ -420,3 +427,19 @@ class RouteService:
                 return option
 
         return None
+
+    def _get_direct_route_profile(
+            self,
+            option: dict
+    ) -> RouteProfile:
+        """
+        Group a direct mobility option into the frontend route families.
+        """
+
+        if option["mode"] == "walk":
+            return RouteProfile.direct_walk
+
+        if option["source"] == "folding_bike":
+            return RouteProfile.direct_bike
+
+        return RouteProfile.direct_shared
