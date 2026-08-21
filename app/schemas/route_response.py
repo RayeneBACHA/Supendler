@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.route import SegmentRole
-from app.schemas.station import StationResponse
+from app.schemas.stop import StopResponse
 from app.schemas.transport import TransportMode
 
 from enum import Enum
@@ -93,8 +93,8 @@ class RouteOption(BaseModel):
     ]
 
 class RouteOptionsResponse(BaseModel):
-    start_station: StationResponse
-    end_station: StationResponse
+    start_stop: StopResponse
+    end_stop: StopResponse
 
     option_count: int = Field(ge=1)
 

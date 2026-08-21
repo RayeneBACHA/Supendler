@@ -1,62 +1,195 @@
-stations = [
-    {"id": 1, "name": "Darmstadt Hbf", "city": "Darmstadt"},
-    {"id": 2, "name": "Luisenplatz", "city": "Darmstadt"},
-    {"id": 3, "name": "TU Lichtwiese", "city": "Darmstadt"},
-    {"id": 4, "name": "Schloss", "city": "Darmstadt"},
-    {"id": 5, "name": "Darmstadt Nord", "city": "Darmstadt"}
-]
+# ============================================================
+# STOPS
+# ============================================================
 
-
-lines = [
-    {"name": "Tram 2", "type": "tram"},
-    {"name": "RB", "type": "train"}
-]
-
-
-trips = [
+stops = [
     {
-        "id": 1,
-        "line_name": "Tram 2",
-        "destination": "TU Lichtwiese",
-        "start_time": "12:18"
+        "stop_id": 1,
+        "stop_name": "Darmstadt Hbf",
+        "city": "Darmstadt"
     },
     {
-        "id": 2,
-        "line_name": "Tram 2",
-        "destination": "Darmstadt Hbf",
-        "start_time": "12:25"
+        "stop_id": 2,
+        "stop_name": "Luisenplatz",
+        "city": "Darmstadt"
     },
     {
-        "id": 3,
-        "line_name": "RB",
-        "destination": "Darmstadt Nord",
-        "start_time": "12:30"
+        "stop_id": 3,
+        "stop_name": "TU Lichtwiese",
+        "city": "Darmstadt"
     },
     {
-        "id": 4,
-        "line_name": "Tram 2",
-        "destination": "TU Lichtwiese",
-        "start_time": "12:38"
+        "stop_id": 4,
+        "stop_name": "Schloss",
+        "city": "Darmstadt"
+    },
+    {
+        "stop_id": 5,
+        "stop_name": "Darmstadt Nord",
+        "city": "Darmstadt"
     }
 ]
 
 
-trip_stops = [
-    {"trip_id": 1, "station_id": 1, "stop_order": 1, "minute": 0},
-    {"trip_id": 1, "station_id": 2, "stop_order": 2, "minute": 7},
-    {"trip_id": 1, "station_id": 4, "stop_order": 3, "minute": 10},
-    {"trip_id": 1, "station_id": 3, "stop_order": 4, "minute": 19},
+routes = [
+    {
+        "route_id": 1,
+        "route_short_name": "2",
+        "route_type": "tram"
+    },
+    {
+        "route_id": 2,
+        "route_short_name": "RB",
+        "route_type": "train"
+    }
+]
 
-    {"trip_id": 2, "station_id": 3, "stop_order": 1, "minute": 0},
-    {"trip_id": 2, "station_id": 4, "stop_order": 2, "minute": 9},
-    {"trip_id": 2, "station_id": 2, "stop_order": 3, "minute": 12},
-    {"trip_id": 2, "station_id": 1, "stop_order": 4, "minute": 20},
+trips = [
+    {
+        "trip_id": 1,
+        "route_id": 1,
+        "service_id": "weekday",
+        "trip_headsign": "TU Lichtwiese"
+    },
 
-    {"trip_id": 3, "station_id": 1, "stop_order": 1, "minute": 0},
-    {"trip_id": 3, "station_id": 5, "stop_order": 2, "minute": 5},
+    {
+        "trip_id": 2,
+        "route_id": 1,
+        "service_id": "weekday",
+        "trip_headsign": "Darmstadt Hbf"
+    },
 
-    {"trip_id": 4, "station_id": 1, "stop_order": 1, "minute": 0},
-    {"trip_id": 4, "station_id": 2, "stop_order": 2, "minute": 7},
-    {"trip_id": 4, "station_id": 4, "stop_order": 3, "minute": 10},
-    {"trip_id": 4, "station_id": 3, "stop_order": 4, "minute": 19},
+    {
+        "trip_id": 3,
+        "route_id": 2,
+        "service_id": "weekday",
+        "trip_headsign": "Darmstadt Nord"
+    },
+
+    {
+        "trip_id": 4,
+        "route_id": 1,
+        "service_id": "weekday",
+        "trip_headsign": "TU Lichtwiese"
+    }
+]
+
+stop_times = [
+    # ============================================================
+    # Trip 1 - Tram 2 - Darmstadt Hbf -> TU Lichtwiese
+    # ============================================================
+
+    {
+        "trip_id": 1,
+        "stop_id": 1,
+        "stop_sequence": 1,
+        "arrival_time": "12:18",
+        "departure_time": "12:18"
+    },
+    {
+        "trip_id": 1,
+        "stop_id": 2,
+        "stop_sequence": 2,
+        "arrival_time": "12:25",
+        "departure_time": "12:25"
+    },
+    {
+        "trip_id": 1,
+        "stop_id": 4,
+        "stop_sequence": 3,
+        "arrival_time": "12:28",
+        "departure_time": "12:28"
+    },
+    {
+        "trip_id": 1,
+        "stop_id": 3,
+        "stop_sequence": 4,
+        "arrival_time": "12:37",
+        "departure_time": "12:37"
+    },
+
+    # ============================================================
+    # Trip 2 - Tram 2 - TU Lichtwiese -> Darmstadt Hbf
+    # ============================================================
+
+    {
+        "trip_id": 2,
+        "stop_id": 3,
+        "stop_sequence": 1,
+        "arrival_time": "12:25",
+        "departure_time": "12:25"
+    },
+    {
+        "trip_id": 2,
+        "stop_id": 4,
+        "stop_sequence": 2,
+        "arrival_time": "12:34",
+        "departure_time": "12:34"
+    },
+    {
+        "trip_id": 2,
+        "stop_id": 2,
+        "stop_sequence": 3,
+        "arrival_time": "12:37",
+        "departure_time": "12:37"
+    },
+    {
+        "trip_id": 2,
+        "stop_id": 1,
+        "stop_sequence": 4,
+        "arrival_time": "12:45",
+        "departure_time": "12:45"
+    },
+
+    # ============================================================
+    # Trip 3 - RB - Darmstadt Hbf -> Darmstadt Nord
+    # ============================================================
+
+    {
+        "trip_id": 3,
+        "stop_id": 1,
+        "stop_sequence": 1,
+        "arrival_time": "12:30",
+        "departure_time": "12:30"
+    },
+    {
+        "trip_id": 3,
+        "stop_id": 5,
+        "stop_sequence": 2,
+        "arrival_time": "12:35",
+        "departure_time": "12:35"
+    },
+
+    # ============================================================
+    # Trip 4 - Tram 2 - Darmstadt Hbf -> TU Lichtwiese
+    # ============================================================
+
+    {
+        "trip_id": 4,
+        "stop_id": 1,
+        "stop_sequence": 1,
+        "arrival_time": "12:38",
+        "departure_time": "12:38"
+    },
+    {
+        "trip_id": 4,
+        "stop_id": 2,
+        "stop_sequence": 2,
+        "arrival_time": "12:45",
+        "departure_time": "12:45"
+    },
+    {
+        "trip_id": 4,
+        "stop_id": 4,
+        "stop_sequence": 3,
+        "arrival_time": "12:48",
+        "departure_time": "12:48"
+    },
+    {
+        "trip_id": 4,
+        "stop_id": 3,
+        "stop_sequence": 4,
+        "arrival_time": "12:57",
+        "departure_time": "12:57"
+    }
 ]

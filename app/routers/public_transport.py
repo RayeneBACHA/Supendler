@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.time_service import TimeService
 
-from app.data.fake_db import stations, lines, trips, trip_stops
+from app.data.fake_db import stops, routes, trips, stop_times
 from app.services.public_transport_service import PublicTransportService
 
 router = APIRouter(tags=["public transport"])
@@ -9,10 +9,10 @@ router = APIRouter(tags=["public transport"])
 time_service = TimeService()
 
 public_transport_service = PublicTransportService(
-    stations=stations,
-    lines=lines,
+    stops=stops,
+    routes=routes,
     trips=trips,
-    trip_stops=trip_stops,
+    stop_times=stop_times,
     time_service=time_service
 )
 
@@ -35,14 +35,14 @@ def get_direct_trips(from_station_id: int, to_station_id: int):
     return direct_trips
 
 
-@router.get("/stations/{station_id}/trips")
-def get_trips_for_station(station_id: int):
-    station = public_transport_service.get_station_by_id(station_id)
+@router.get("/stops/{stop_id}/trips")
+def get_trips_for_stop(stop_id: int):
+    stop = public_transport_service.get_stop_by_id(stop_id)
 
-    if station is None:
-        raise HTTPException(status_code=404, detail="Station not found")
+    if stop is None:
+        raise HTTPException(status_code=404, detail="Stop not found")
 
     return {
-        "station": station,
-        "trips": public_transport_service.get_trips_for_station(station_id)
+        "stop": stop,
+        "trips": public_transport_service.get_trips_for_stop(stop_id)
     }

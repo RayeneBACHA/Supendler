@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.data.fake_db import lines, stations, trip_stops, trips
+from app.data.fake_db import routes, stops, trips, stop_times
 from app.schemas.route import RouteOptionsRequest
 from app.services.mobility_option_service import MobilityOptionService
 from app.services.public_transport_service import PublicTransportService
@@ -18,10 +18,10 @@ mobility_option_service = MobilityOptionService(
 )
 
 public_transport_service = PublicTransportService(
-    stations=stations,
-    lines=lines,
+    stops=stops,
+    routes=routes,
     trips=trips,
-    trip_stops=trip_stops,
+    stop_times=stop_times,
     time_service=time_service
 )
 
@@ -36,30 +36,41 @@ route_service = RouteService(
     response_model=RouteOptionsResponse
 )
 def get_route_options(request: RouteOptionsRequest):
-    start_station = public_transport_service.get_station_by_id(
+    
+    start_stop = public_transport_service.get_stop_by_id(
         request.station_pair.start_station_id
     )
 
-    if start_station is None:
+    if start_stop is None:
         raise HTTPException(
             status_code=404,
-            detail="Start station not found"
+            detail="Start stop not found"
         )
 
-    end_station = public_transport_service.get_station_by_id(
+    end_stop = public_transport_service.get_stop_by_id(
             request.station_pair.end_station_id
         )
     
-    if end_station is None:
+    if end_stop is None:
         raise HTTPException(
             status_code=404,
-            detail="End station not found"
+            detail="End stop not found"
         )
 
     result = route_service.generate_route_options(request)
 
     return {
-        "start_station": start_station,
-        "end_station": end_station,
+        "start_stop": {
+            "id": start_stop["stop_id"],
+            "name": start_stop["stop_name"],
+            "city": start_stop["city"]
+        },
+
+        "end_stop": {
+            "id": end_stop["stop_id"],
+            "name": end_stop["stop_name"],
+            "city": end_stop["city"]
+        },
+
         **result
     }

@@ -3,163 +3,229 @@ from app.services.time_service import TimeService
 class PublicTransportService:
     def __init__(
         self,
-        stations: list[dict],
-        lines: list[dict],
+        stops: list[dict],
+        routes: list[dict],
         trips: list[dict],
-        trip_stops: list[dict],
+        stop_times: list[dict],
         time_service: TimeService
     ):
-        self.stations = stations
-        self.lines = lines
+        self.stops = stops
+        self.routes = routes
         self.trips = trips
-        self.trip_stops = trip_stops
+        self.stop_times = stop_times
         self.time_service = time_service
 
     def get_all_trips(self):
         return self.trips
 
-    def get_station_by_id(self, station_id: int):
-        for station in self.stations:
-            if station["id"] == station_id:
-                return station
+    def get_stop_by_id(
+        self,
+        stop_id: int
+    ) -> dict | None:
+        for stop in self.stops:
+            if stop["stop_id"] == stop_id:
+                return stop
 
         return None
 
-    def get_line_by_name(self, line_name: str):
-        for line in self.lines:
-            if line["name"] == line_name:
-                return line
+    def get_route_by_id(
+        self,
+        route_id: int
+    ) -> dict | None:
+
+        for route in self.routes:
+            if route["route_id"] == route_id:
+                return route
 
         return None
 
-    def get_trip_by_id(self, trip_id: int):
+    def get_trip_by_id(
+        self,
+        trip_id: int
+    ) -> dict | None:
         for trip in self.trips:
-            if trip["id"] == trip_id:
+            if trip["trip_id"] == trip_id:
                 return trip
 
         return None
+    
+    def get_stop_times_for_trip(
+        self,
+        trip_id: int
+    ) -> list[dict]:
 
-    def get_stops_for_trip(self, trip_id: int):
-        stops = []
+        stop_times = []
 
-        for stop in self.trip_stops:
-            if stop["trip_id"] == trip_id:
-                stops.append(stop)
+        for stop_time in self.stop_times:
+            if stop_time["trip_id"] == trip_id:
+                stop_times.append(stop_time)
 
-        return sorted(stops, key=lambda stop: stop["stop_order"])
+        return sorted(
+            stop_times,
+            key=lambda stop_time: stop_time["stop_sequence"]
+        )
 
-    def get_trips_for_station(self, station_id: int):
+    def get_trips_for_stop(
+        self,
+        stop_id: int
+    ) -> list[dict]:
+        """
+        Return all scheduled trips that serve a given stop.
+        """
+
         result = []
 
-        for stop in self.trip_stops:
-            if stop["station_id"] == station_id:
-                trip = self.get_trip_by_id(stop["trip_id"])
-                line = self.get_line_by_name(trip["line_name"])
+        for stop_time in self.stop_times:
+            if stop_time["stop_id"] != stop_id:
+                continue
 
-                result.append({
-                    "trip_id": trip["id"],
-                    "line": line["name"],
-                    "line_type": line["type"],
-                    "destination": trip["destination"],
-                    "stop_order": stop["stop_order"],
-                    "minute": stop["minute"]
-                })
+            trip = self.get_trip_by_id(
+                stop_time["trip_id"]
+            )
+
+            route = self.get_route_by_id(
+                trip["route_id"]
+            )
+
+            result.append({
+                "trip_id": trip["trip_id"],
+                "route": route["route_short_name"],
+                "route_type": route["route_type"],
+                "destination": trip["trip_headsign"],
+                "stop_sequence": stop_time["stop_sequence"],
+                "arrival_time": stop_time["arrival_time"],
+                "departure_time": stop_time["departure_time"]
+            })
 
         return result
 
-    def find_direct_trips(self, from_station_id: int, to_station_id: int):
+    def find_direct_trips(
+        self,
+        from_stop_id: int,
+        to_stop_id: int
+    ) -> list[dict]:
+
         direct_trips = []
 
         for trip in self.trips:
-            stops = self.get_stops_for_trip(trip["id"])
 
-            from_stop = None
-            to_stop = None
-
-            for stop in stops:
-                if stop["station_id"] == from_station_id:
-                    from_stop = stop
-
-                if stop["station_id"] == to_station_id:
-                    to_stop = stop
-
-            if from_stop is None or to_stop is None:
-                continue
-
-            if from_stop["stop_order"] >= to_stop["stop_order"]:
-                continue
-
-            departure_time = self.get_stop_time(
-                trip,
-                from_stop
+            stop_times = self.get_stop_times_for_trip(
+                trip["trip_id"]
             )
 
-            arrival_time = self.get_stop_time(
-                trip,
-                to_stop
+            from_stop_time = None
+            to_stop_time = None
+
+            for stop_time in stop_times:
+
+                if stop_time["stop_id"] == from_stop_id:
+                    from_stop_time = stop_time
+
+                if stop_time["stop_id"] == to_stop_id:
+                    to_stop_time = stop_time
+
+        # The trip must serve both requested stops.
+            if (
+                from_stop_time is None
+                or to_stop_time is None
+            ):
+                continue
+
+            # Origin must come before destination.
+            if (
+                from_stop_time["stop_sequence"]
+                >= to_stop_time["stop_sequence"]
+            ):
+                continue
+
+            route = self.get_route_by_id(
+                trip["route_id"]
             )
 
-            line = self.get_line_by_name(trip["line_name"])
+            # Temporary compatibility with old API response.
+            # GTFS stop_times are now the real source of truth.
+            trip_start_minutes = (
+                self.time_service.time_to_minutes(
+                    stop_times[0]["departure_time"]
+                )
+            )
 
             stops_between = []
 
-            for stop in stops:
-                if from_stop["stop_order"] <= stop["stop_order"] <= to_stop["stop_order"]:
-                    station = self.get_station_by_id(stop["station_id"])
+            for stop_time in stop_times:
+
+                if (
+                    from_stop_time["stop_sequence"]
+                    <= stop_time["stop_sequence"]
+                    <= to_stop_time["stop_sequence"]
+                ):
+
+                    stop = self.get_stop_by_id(
+                        stop_time["stop_id"]
+                    )
+
+                    current_stop_minutes = (
+                        self.time_service.time_to_minutes(
+                            stop_time["departure_time"]
+                        )
+                    )
+
+                    minute = (
+                        current_stop_minutes
+                        - trip_start_minutes
+                    )
 
                     stops_between.append({
-                        "station_id": station["id"],
-                        "station_name": station["name"],
-                        "stop_order": stop["stop_order"],
-                        "minute": stop["minute"],
-                        "scheduled_time": self.get_stop_time(
-                            trip,
-                            stop
-                        )
+                        "station_id": stop["stop_id"],
+                        "station_name": stop["stop_name"],
+                        "stop_order": stop_time["stop_sequence"],
+                        "minute": minute,
+                        "scheduled_time": stop_time["departure_time"]
                     })
 
-            duration_minutes = to_stop["minute"] - from_stop["minute"]
+            departure_time = (
+                from_stop_time["departure_time"]
+            )
+
+            arrival_time = (
+                to_stop_time["arrival_time"]
+            )
+
+            departure_minutes = (
+                self.time_service.time_to_minutes(
+                    departure_time
+                )
+            )
+
+            arrival_minutes = (
+                self.time_service.time_to_minutes(
+                    arrival_time
+                )
+            )
+
+            duration_minutes = (
+                arrival_minutes
+                - departure_minutes
+            )
 
             direct_trips.append({
-                "trip_id": trip["id"],
-                "line": line["name"],
-                "line_type": line["type"],
-                "destination": trip["destination"],
+                "trip_id": trip["trip_id"],
+
+                "line": route["route_short_name"],
+                "line_type": route["route_type"],
+
+                "destination": trip["trip_headsign"],
 
                 "departure_time": departure_time,
                 "arrival_time": arrival_time,
 
-
                 "duration_minutes": duration_minutes,
+
                 "stops": stops_between
             })
 
         return direct_trips
 
-    def get_stop_time(
-            self,
-            trip: dict,
-            stop: dict
-    ) -> str:
-        """
-        Calculate the scheduled clock time at a specific stop.
-
-        Each stop stores its time as an offset in minutes from the
-        beginning of the trip.
-        """
-
-        trip_start_minutes = self.time_service.time_to_minutes(
-            trip["start_time"]
-        )
-
-        stop_time_minutes = (
-            trip_start_minutes
-            + stop["minute"]
-        )
-
-        return self.time_service.minutes_to_time(
-            stop_time_minutes
-        )
 
     def can_catch_departure(
             self,
