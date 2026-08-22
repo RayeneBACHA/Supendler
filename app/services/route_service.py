@@ -129,8 +129,6 @@ class RouteService:
             egress_options
         )
 
-        if walking_access is None or walking_egress is None:
-            return routes
 
         #------------------------------------------------------------
         # 1. Walking baseline
@@ -163,65 +161,117 @@ class RouteService:
         # 2. Folding-bike profile
         #------------------------------------------------------------
 
-        if not request.user.has_folding_bike:
-            return routes
+        if request.user.has_folding_bike:
 
-        folding_bike_access = self._find_folding_bike_option(
-            access_options
-        )
+            folding_bike_access = self._find_folding_bike_option(
+                access_options
+            )
 
-        folding_bike_egress = self._find_folding_bike_option(
-            egress_options
-        )
+            folding_bike_egress = self._find_folding_bike_option(
+                egress_options
+            )
 
-        if folding_bike_access is None or folding_bike_egress is None:
-            return routes
-
-        bike_trips = self.public_transport_service.evaluate_direct_trip_access(
-            from_station_id=request.station_pair.start_station_id,
-            to_station_id=request.station_pair.end_station_id,
-            ready_time=request.journey.ready_time,
-            travel_time_minutes=folding_bike_access["time_minutes"]
-        )
-
-        unlocked_trips = (
-            self.public_transport_service.find_unlocked_direct_trips(
+            bike_trips = self.public_transport_service.evaluate_direct_trip_access(
                 from_station_id=request.station_pair.start_station_id,
                 to_station_id=request.station_pair.end_station_id,
                 ready_time=request.journey.ready_time,
-                baseline_travel_time_minutes=walking_access["time_minutes"],
-                alternative_travel_time_minutes=folding_bike_access["time_minutes"]
+                travel_time_minutes=folding_bike_access["time_minutes"]
             )
-        )
 
-        unlocked_trips_ids = {
-            trip["trip_id"]
-            for trip in unlocked_trips
-        }
-
-        for trip in bike_trips:
-
-            if not trip["catchable"]:
-                continue
-
-            benefit = None
-
-            if trip["trip_id"] in unlocked_trips_ids:
-                benefit = "unlocks_connection"
-
-            routes.append(
-                self._create_public_transport_route(
-                    access_option=folding_bike_access,
-                    trip=trip,
-                    egress_option=folding_bike_egress,
-                    profile=RouteProfile.pt_folding_bike,
-                    leave_by_time=trip["leave_by_time"],
-                    wait_before_start_minutes=trip[
-                        "wait_before_start_minutes"
-                    ],
-                    benefit=benefit
+            unlocked_trips = (
+                self.public_transport_service.find_unlocked_direct_trips(
+                    from_station_id=request.station_pair.start_station_id,
+                    to_station_id=request.station_pair.end_station_id,
+                    ready_time=request.journey.ready_time,
+                    baseline_travel_time_minutes=walking_access["time_minutes"],
+                    alternative_travel_time_minutes=folding_bike_access["time_minutes"]
                 )
             )
+
+            unlocked_trips_ids = {
+                trip["trip_id"]
+                for trip in unlocked_trips
+            }
+
+            for trip in bike_trips:
+
+                if not trip["catchable"]:
+                    continue
+
+                benefit = None
+
+                if trip["trip_id"] in unlocked_trips_ids:
+                    benefit = "unlocks_connection"
+
+                routes.append(
+                    self._create_public_transport_route(
+                        access_option=folding_bike_access,
+                        trip=trip,
+                        egress_option=folding_bike_egress,
+                        profile=RouteProfile.pt_folding_bike,
+                        leave_by_time=trip["leave_by_time"],
+                        wait_before_start_minutes=trip[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit=benefit
+                    )
+                )
+
+        shared_access_options = self._find_shared_options(
+            access_options
+        )
+
+        # ------------------------------------------------------------
+        # 3. Shared-mobility access profile
+        # ------------------------------------------------------------
+
+        for shared_access in shared_access_options:
+
+            shared_trips = (
+                self.public_transport_service.evaluate_direct_trip_access(
+                    from_station_id=request.station_pair.start_station_id,
+                    to_station_id=request.station_pair.end_station_id,
+                    ready_time=request.journey.ready_time,
+                    travel_time_minutes=shared_access["time_minutes"]
+                )
+            )
+
+            unlocked_trips = (
+                self.public_transport_service.find_unlocked_direct_trips(
+                    from_station_id=request.station_pair.start_station_id,
+                    to_station_id=request.station_pair.end_station_id,
+                    ready_time=request.journey.ready_time,
+                    baseline_travel_time_minutes=walking_access["time_minutes"],
+                    alternative_travel_time_minutes=shared_access["time_minutes"]
+                )
+            )
+
+            unlocked_trip_ids = {
+                trip["trip_id"]
+                for trip in unlocked_trips
+            }
+
+            for trip in shared_trips:
+
+                if not trip["catchable"]:
+                    continue
+
+                if trip["trip_id"] not in unlocked_trip_ids:
+                    continue
+
+                routes.append(
+                    self._create_public_transport_route(
+                        access_option=shared_access,
+                        trip=trip,
+                        egress_option=walking_egress,
+                        profile=RouteProfile.pt_shared,
+                        leave_by_time=trip["leave_by_time"],
+                        wait_before_start_minutes=trip[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit="unlocks_connection"
+                    )
+                )
 
         return routes
 
@@ -355,3 +405,19 @@ class RouteService:
             return RouteProfile.direct_bike
 
         return RouteProfile.direct_shared
+
+    def _find_shared_options(
+        self,
+        options: list[dict]
+    ) -> list[dict]:
+
+        return [
+            option
+            for option in options
+            if option["source"] in {
+                "shared_bike",
+                "shared_scooter"
+            }
+        ]
+
+    

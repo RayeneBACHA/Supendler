@@ -156,3 +156,49 @@ class RouteOptionsRequest(BaseModel):
     direct: MobilitySegment
     access: MobilitySegment
     egress: MobilitySegment
+
+    @model_validator(mode="after")
+    def validate_folding_bike_distances(self):
+
+        if self.user.has_folding_bike:
+
+            if self.direct.folding_bike_distance_km is None:
+                raise ValueError(
+                    "direct folding bike distance is required"
+                    "when has_folding_bike is true"
+                )
+
+            if self.access.folding_bike_distance_km is None:
+                            raise ValueError(
+                                "access folding bike distance is required"
+                                "when has_folding_bike is true"
+                            )
+
+            if self.egress.folding_bike_distance_km is None:
+                            raise ValueError(
+                                "egress folding bike distance is required"
+                                "when has_folding_bike is true"
+                            )
+
+        return self
+
+
+    @model_validator(mode="after")
+    def validate_walk_distances(self):
+
+        if self.direct.walk_distance_km is None:
+            raise ValueError(
+                "direct walk distance is required"
+            )
+
+        if self.access.walk_distance_km is None:
+            raise ValueError(
+                "access walk distance is required"
+            )
+
+        if self.egress.walk_distance_km is None:
+            raise ValueError(
+                    "egress walk distance is required"
+            )
+
+        return self
