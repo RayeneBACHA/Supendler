@@ -3,6 +3,7 @@ from app.services.time_service import TimeService
 class PublicTransportService:
 
     SAME_STOP_TRANSFER_WALK_MINUTES = 1
+    MIN_TRANSFER_ARRIVAL_GAIN_MINUTES = 5
     
     def __init__(
         self,
@@ -253,7 +254,7 @@ class PublicTransportService:
             departure_time
         )
 
-        arrival_at_station = (
+        arrival_at_stop = (
             ready_minutes
             +travel_time_minutes
         )
@@ -265,7 +266,7 @@ class PublicTransportService:
             - safety_buffer_minutes
         )
 
-        return arrival_at_station <= latest_safe_arrival
+        return arrival_at_stop <= latest_safe_arrival
 
 
     def find_catchable_direct_trips(
@@ -456,49 +457,124 @@ class PublicTransportService:
 
         connections = []
 
+        # Try every stop as a possible transfer point.
+
         for transfer_stop in self.stops:
 
             transfer_stop_id = transfer_stop["stop_id"]
 
-            # The transfer stop must be somewhere between
-            # the origin and destination.
+            # The origin and final destination cannot be transfer stops.
             if transfer_stop_id in {
                 from_stop_id,
                 to_stop_id
             }:
                 continue
 
+            # Find trips that can take us:
+            # origin -> transfer stop
 
             first_trips = self.find_direct_trips(
                 from_stop_id=from_stop_id,
                 to_stop_id=transfer_stop_id
             )
 
+            # Find trips that can take us:
+            # transfer stop -> destination
             second_trips = self.find_direct_trips(
                 from_stop_id=transfer_stop_id,
                 to_stop_id=to_stop_id
             )
 
+            # Try every possible Trip 1 + Trip 2 combination.
             for first_trip in first_trips:
 
                 for second_trip in second_trips:
 
-                    # Same vehicle means no real transfer.
+                    # If both parts use the same trip, the passenger
+                    # never changes vehicle, so this is not a transfer.
                     if first_trip["trip_id"] == second_trip["trip_id"]:
                         continue
 
-                    first_arrival_minutes = self.time_service.time_to_minutes(
+                    # -------------------------------------------------
+                    # 1. Check whether changing vehicles is worthwhile
+                    # -------------------------------------------------
+
+                    # Does Trip 1 itself continue to the final destination?
+                    first_trip_at_destination = (
+                        self.get_stop_time_for_trip_at_stop(
+                            trip_id=first_trip["trip_id"],
+                            stop_id=to_stop_id
+                        )
+                    )
+
+
+                    # Get Trip 1's stop-time at the transfer point.
+                    first_trip_at_transfer = (
+                        self.get_stop_time_for_trip_at_stop(
+                            trip_id=first_trip["trip_id"],
+                            stop_id=transfer_stop_id
+                        )
+                    )
+
+                    # If Trip 1 continues from the transfer stop
+                    # to the destination, the user could simply stay
+                    # on the vehicle instead of transferring.
+                    if (
+                        first_trip_at_destination is not None
+                        and first_trip_at_transfer is not None
+                        and first_trip_at_destination["stop_sequence"]
+                        > first_trip_at_transfer["stop_sequence"]
+                    ) :
+
+                        stay_on_first_arrival = (
+                            self.time_service.time_to_minutes(
+                                first_trip_at_destination["arrival_time"]
+                            )
+                        )
+
+                        transfer_route_arrival = (
+                            self.time_service.time_to_minutes(
+                                second_trip["arrival_time"]
+                            )
+                        )
+
+                        # Positive value = transfer arrives earlier.
+                        #
+                        # Example:
+                        # stay on Trip 1 -> 12:50
+                        # transfer       -> 12:40
+                        # gain           -> 10 minutes
+                        transfer_gain = (
+                            stay_on_first_arrival 
+                            - transfer_route_arrival
+                        )
+
+                        # Do not recommend changing vehicles for only
+                        # a tiny improvement.
+                        if (
+                            transfer_gain 
+                            < self.MIN_TRANSFER_ARRIVAL_GAIN_MINUTES
+                        ):
+                            continue
+
+                    # ---------------------------------------------
+                    # 2. Check whether the transfer is physically possible
+                    # ---------------------------------------------
+
+                    # When does Trip 1 arrive at the transfer stop?
+                    first_arrival = self.time_service.time_to_minutes(
                         first_trip["arrival_time"]
                     )
 
-                    second_departure_minutes = self.time_service.time_to_minutes(
+                    # When does Trip 2 leave the transfer stop?
+                    second_departure = self.time_service.time_to_minutes(
                         second_trip["departure_time"]
                     )
 
-
+                    # Total time available between the two vehicles.
                     total_transfer_time_minutes = (
-                        second_departure_minutes
-                        - first_arrival_minutes
+                        second_departure
+                        - first_arrival
                     )
 
                     if (
@@ -506,6 +582,10 @@ class PublicTransportService:
                         < self.SAME_STOP_TRANSFER_WALK_MINUTES
                     ) :
                         continue
+
+                    # -------------------------------------------------
+                    # 3. Valid and useful transfer -> save it
+                    # -------------------------------------------------
 
                     connections.append({
                         "first_trip": first_trip,
