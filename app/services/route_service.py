@@ -4,6 +4,9 @@ from app.services.public_transport_service import PublicTransportService
 from app.schemas.route_response import RouteProfile
 
 class RouteService:
+
+    MIN_SHARED_FINAL_ARRIVAL_GAIN_MINUTES = 10
+
     def __init__(
         self,
         mobility_option_service: MobilityOptionService,
@@ -99,8 +102,12 @@ class RouteService:
         Build timetable-aware public transport routes.
 
         Walking is the baseline mobility profile.
-        If the user has a folding bike, folding-bike access is evaluated 
-        against walking to detect departures that the bike unlocks.
+
+        Alternative access modes can unlock public transport departures
+        that walking cannot reach in time.
+
+        Shared egress is included when it improves final arrival time
+        by the configured minimum threshold.
         """
 
         routes = []
@@ -141,10 +148,14 @@ class RouteService:
             travel_time_minutes=walking_access["time_minutes"]
         )
 
-        for trip in walking_trips:
+        catchable_walking_trips = [
+            trip
+            for trip in walking_trips
+            if trip["catchable"]
+        ]
 
-            if not trip["catchable"]:
-                continue
+        for trip in catchable_walking_trips:
+
 
             routes.append(
                 self._create_public_transport_route(
@@ -231,15 +242,6 @@ class RouteService:
 
         for shared_access in shared_access_options:
 
-            shared_trips = (
-                self.public_transport_service.evaluate_direct_trip_access(
-                    from_station_id=request.station_pair.start_station_id,
-                    to_station_id=request.station_pair.end_station_id,
-                    ready_time=request.journey.ready_time,
-                    travel_time_minutes=shared_access["time_minutes"]
-                )
-            )
-
             unlocked_trips = (
                 self.public_transport_service.find_unlocked_direct_trips(
                     from_station_id=request.station_pair.start_station_id,
@@ -250,18 +252,7 @@ class RouteService:
                 )
             )
 
-            unlocked_trip_ids = {
-                trip["trip_id"]
-                for trip in unlocked_trips
-            }
-
-            for trip in shared_trips:
-
-                if not trip["catchable"]:
-                    continue
-
-                if trip["trip_id"] not in unlocked_trip_ids:
-                    continue
+            for trip in unlocked_trips:
 
                 routes.append(
                     self._create_public_transport_route(
@@ -288,13 +279,10 @@ class RouteService:
                 - shared_egress["time_minutes"]
             )
 
-            if final_arrival_gain_minutes < 10:
+            if final_arrival_gain_minutes < self.MIN_SHARED_FINAL_ARRIVAL_GAIN_MINUTES:
                 continue
 
-            for trip in walking_trips:
-
-                if not trip["catchable"]:
-                    continue
+            for trip in catchable_walking_trips:
 
                 routes.append(
                     self._create_public_transport_route(
