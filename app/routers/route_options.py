@@ -38,7 +38,7 @@ route_service = RouteService(
 def get_route_options(request: RouteOptionsRequest):
     
     start_stop = public_transport_service.get_stop_by_id(
-        request.station_pair.start_station_id
+        request.stop_pair.start_stop_id
     )
 
     if start_stop is None:
@@ -48,7 +48,7 @@ def get_route_options(request: RouteOptionsRequest):
         )
 
     end_stop = public_transport_service.get_stop_by_id(
-            request.station_pair.end_station_id
+            request.stop_pair.end_stop_id
         )
     
     if end_stop is None:

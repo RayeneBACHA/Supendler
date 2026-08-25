@@ -6,14 +6,14 @@ class SegmentRole(str, Enum):
     access = "access"
     egress = "egress"
 
-class StationPair(BaseModel):
-    start_station_id: int = Field(gt=0)
-    end_station_id: int = Field(gt=0)
+class StopPair(BaseModel):
+    start_stop_id: int = Field(gt=0)
+    end_stop_id: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def stations_must_be_different(self):
-        if self.start_station_id == self.end_station_id:
-            raise ValueError("Start station and end station must be different")
+    def stops_must_be_different(self):
+        if self.start_stop_id == self.end_stop_id:
+            raise ValueError("Start stop and end stop must be different")
 
         return self
 
@@ -150,7 +150,7 @@ class JourneyTime(BaseModel):
 class RouteOptionsRequest(BaseModel):
     journey: JourneyTime
 
-    station_pair: StationPair
+    stop_pair: StopPair
     user: UserMobility
 
     direct: MobilitySegment

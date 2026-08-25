@@ -142,8 +142,8 @@ class RouteService:
         #------------------------------------------------------------
 
         walking_trips = self.public_transport_service.evaluate_direct_trip_access(
-            from_station_id=request.station_pair.start_station_id,
-            to_station_id=request.station_pair.end_station_id,
+            from_stop_id=request.stop_pair.start_stop_id,
+            to_stop_id=request.stop_pair.end_stop_id,
             ready_time=request.journey.ready_time,
             travel_time_minutes=walking_access["time_minutes"]
         )
@@ -183,16 +183,16 @@ class RouteService:
             )
 
             bike_trips = self.public_transport_service.evaluate_direct_trip_access(
-                from_station_id=request.station_pair.start_station_id,
-                to_station_id=request.station_pair.end_station_id,
+                from_stop_id=request.stop_pair.start_stop_id,
+                to_stop_id=request.stop_pair.end_stop_id,
                 ready_time=request.journey.ready_time,
                 travel_time_minutes=folding_bike_access["time_minutes"]
             )
 
             unlocked_trips = (
                 self.public_transport_service.find_unlocked_direct_trips(
-                    from_station_id=request.station_pair.start_station_id,
-                    to_station_id=request.station_pair.end_station_id,
+                    from_stop_id=request.stop_pair.start_stop_id,
+                    to_stop_id=request.stop_pair.end_stop_id,
                     ready_time=request.journey.ready_time,
                     baseline_travel_time_minutes=walking_access["time_minutes"],
                     alternative_travel_time_minutes=folding_bike_access["time_minutes"]
@@ -244,8 +244,8 @@ class RouteService:
 
             unlocked_trips = (
                 self.public_transport_service.find_unlocked_direct_trips(
-                    from_station_id=request.station_pair.start_station_id,
-                    to_station_id=request.station_pair.end_station_id,
+                    from_stop_id=request.stop_pair.start_stop_id,
+                    to_stop_id=request.stop_pair.end_stop_id,
                     ready_time=request.journey.ready_time,
                     baseline_travel_time_minutes=walking_access["time_minutes"],
                     alternative_travel_time_minutes=shared_access["time_minutes"]

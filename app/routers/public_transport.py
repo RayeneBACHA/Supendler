@@ -23,10 +23,10 @@ def get_trips():
 
 
 @router.get("/trips/direct")
-def get_direct_trips(from_station_id: int, to_station_id: int):
+def get_direct_trips(from_stop_id: int, to_stop_id: int):
     direct_trips = public_transport_service.find_direct_trips(
-        from_station_id,
-        to_station_id
+        from_stop_id,
+        to_stop_id
     )
 
     if len(direct_trips) == 0:

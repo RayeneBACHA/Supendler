@@ -31,8 +31,8 @@ class MobilityLeg(BaseModel):
 
 
 class PublicTransportStop(BaseModel):
-    station_id: int
-    station_name: str
+    stop_id: int
+    stop_name: str
 
     stop_order: int = Field(gt=0)
     minute: int = Field(ge=0)

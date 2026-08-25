@@ -176,8 +176,8 @@ class PublicTransportService:
                     )
 
                     stops_between.append({
-                        "station_id": stop["stop_id"],
-                        "station_name": stop["stop_name"],
+                        "stop_id": stop["stop_id"],
+                        "stop_name": stop["stop_name"],
                         "stop_order": stop_time["stop_sequence"],
                         "minute": minute,
                         "scheduled_time": stop_time["departure_time"]
@@ -267,8 +267,8 @@ class PublicTransportService:
 
     def find_catchable_direct_trips(
             self,
-            from_station_id: int,
-            to_station_id: int,
+            from_stop_id: int,
+            to_stop_id: int,
             ready_time: str,
             travel_time_minutes: float,
             safety_buffer_minutes: float = 0
@@ -279,8 +279,8 @@ class PublicTransportService:
         """
 
         direct_trips = self.find_direct_trips(
-            from_station_id,
-            to_station_id
+            from_stop_id,
+            to_stop_id
         )
 
         catchable_trips = []
@@ -298,8 +298,8 @@ class PublicTransportService:
 
     def evaluate_direct_trip_access(
         self,
-        from_station_id: int,
-        to_station_id: int,
+        from_stop_id: int,
+        to_stop_id: int,
         ready_time: str,
         travel_time_minutes: float,
         safety_buffer_minutes: float = 0
@@ -313,8 +313,8 @@ class PublicTransportService:
         """
 
         direct_trips = self.find_direct_trips(
-            from_station_id,
-            to_station_id
+            from_stop_id,
+            to_stop_id
         )
 
         evaluated_trips = []
@@ -362,8 +362,8 @@ class PublicTransportService:
 
     def find_unlocked_direct_trips(
         self,
-        from_station_id: int,
-        to_station_id: int,
+        from_stop_id: int,
+        to_stop_id: int,
         ready_time: str,
         baseline_travel_time_minutes: float,
         alternative_travel_time_minutes: float,
@@ -379,16 +379,16 @@ class PublicTransportService:
         """
 
         baseline_evaluation = self.evaluate_direct_trip_access(
-            from_station_id=from_station_id,
-            to_station_id=to_station_id,
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id,
             ready_time=ready_time,
             travel_time_minutes=baseline_travel_time_minutes,
             safety_buffer_minutes=baseline_safety_buffer_minutes
         )
 
         alternative_evaluation = self.evaluate_direct_trip_access(
-            from_station_id=from_station_id,
-            to_station_id=to_station_id,
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id,
             ready_time=ready_time,
             travel_time_minutes=alternative_travel_time_minutes,
             safety_buffer_minutes=alternative_safety_buffer_minutes
