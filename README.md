@@ -232,7 +232,7 @@ Development currently uses manually controlled test data so routing behavior can
 Clone the repository:
 
 ```bash
-git clone https://github.com/<your-username>/supendler.git
+git clone https://github.com/RayeneBACHA/supendler.git
 cd supendler
 ```
 
