@@ -46,3 +46,13 @@ def get_trips_for_stop(stop_id: int):
         "stop": stop,
         "trips": public_transport_service.get_trips_for_stop(stop_id)
     }
+
+@router.get("/trips/transfers")
+def get_transfer_connections(
+    from_stop_id: int,
+    to_stop_id: int
+):
+    return public_transport_service.find_one_transfer_connections(
+        from_stop_id=from_stop_id,
+        to_stop_id=to_stop_id
+    )

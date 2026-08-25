@@ -1,6 +1,9 @@
 from app.services.time_service import TimeService
 
 class PublicTransportService:
+
+    SAME_STOP_TRANSFER_WALK_MINUTES = 1
+    
     def __init__(
         self,
         stops: list[dict],
@@ -426,3 +429,92 @@ class PublicTransportService:
                 })
 
         return unlocked_trips
+
+
+    def get_stop_time_for_trip_at_stop(
+        self,
+        trip_id: int,
+        stop_id: int,
+    ) -> dict | None:
+
+        for stop_time in self.stop_times:
+            if (
+                stop_time["trip_id"] == trip_id
+                and stop_time["stop_id"] == stop_id
+            ):
+                return stop_time
+
+        return None
+
+
+
+    def find_one_transfer_connections(
+        self,
+        from_stop_id: int,
+        to_stop_id: int
+    ) -> list[dict]:
+
+        connections = []
+
+        for transfer_stop in self.stops:
+
+            transfer_stop_id = transfer_stop["stop_id"]
+
+            # The transfer stop must be somewhere between
+            # the origin and destination.
+            if transfer_stop_id in {
+                from_stop_id,
+                to_stop_id
+            }:
+                continue
+
+
+            first_trips = self.find_direct_trips(
+                from_stop_id=from_stop_id,
+                to_stop_id=transfer_stop_id
+            )
+
+            second_trips = self.find_direct_trips(
+                from_stop_id=transfer_stop_id,
+                to_stop_id=to_stop_id
+            )
+
+            for first_trip in first_trips:
+
+                for second_trip in second_trips:
+
+                    # Same vehicle means no real transfer.
+                    if first_trip["trip_id"] == second_trip["trip_id"]:
+                        continue
+
+                    first_arrival_minutes = self.time_service.time_to_minutes(
+                        first_trip["arrival_time"]
+                    )
+
+                    second_departure_minutes = self.time_service.time_to_minutes(
+                        second_trip["departure_time"]
+                    )
+
+
+                    total_transfer_time_minutes = (
+                        second_departure_minutes
+                        - first_arrival_minutes
+                    )
+
+                    if (
+                        total_transfer_time_minutes 
+                        < self.SAME_STOP_TRANSFER_WALK_MINUTES
+                    ) :
+                        continue
+
+                    connections.append({
+                        "first_trip": first_trip,
+                        "transfer_stop": transfer_stop,
+                        "second_trip":  second_trip,
+                        "total_transfer_time_minutes":
+                            total_transfer_time_minutes,
+                        "walk_transfer_time_minutes":
+                            self.SAME_STOP_TRANSFER_WALK_MINUTES
+                    })
+
+        return connections
