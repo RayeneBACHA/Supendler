@@ -221,6 +221,10 @@ class RouteService:
             access_options
         )
 
+        shared_egress_options = self._find_shared_options(
+            egress_options
+        )
+
         # ------------------------------------------------------------
         # 3. Shared-mobility access profile
         # ------------------------------------------------------------
@@ -270,6 +274,39 @@ class RouteService:
                             "wait_before_start_minutes"
                         ],
                         benefit="unlocks_connection"
+                    )
+                )
+
+        # ------------------------------------------------------------
+        # 4. Shared-mobility egress profile
+        # ------------------------------------------------------------
+        
+        for shared_egress in shared_egress_options:
+
+            final_arrival_gain_minutes = (
+                walking_egress["time_minutes"]
+                - shared_egress["time_minutes"]
+            )
+
+            if final_arrival_gain_minutes < 10:
+                continue
+
+            for trip in walking_trips:
+
+                if not trip["catchable"]:
+                    continue
+
+                routes.append(
+                    self._create_public_transport_route(
+                        access_option=walking_access,
+                        trip=trip,
+                        egress_option=shared_egress,
+                        profile=RouteProfile.pt_shared,
+                        leave_by_time=trip["leave_by_time"],
+                        wait_before_start_minutes= trip[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit="faster_arrival"
                     )
                 )
 
