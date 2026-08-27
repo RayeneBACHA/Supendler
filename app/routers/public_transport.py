@@ -56,3 +56,40 @@ def get_transfer_connections(
         from_stop_id=from_stop_id,
         to_stop_id=to_stop_id
     )
+
+@router.get("/trips/transfers/evaluate")
+def evaluate_transfer_connections(
+    from_stop_id: int,
+    to_stop_id: int,
+    ready_time: str,
+    travel_time_minutes: float
+):
+    return (
+        public_transport_service
+        .evaluate_one_transfer_connection_access(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id,
+            ready_time=ready_time,
+            travel_time_minutes=travel_time_minutes
+        )
+    )
+
+@router.get("/trips/transfers/unlocked")
+def get_unlocked_transfer_connections(
+    from_stop_id: int,
+    to_stop_id: int,
+    ready_time: str,
+    baseline_travel_time_minutes: float,
+    alternative_travel_time_minutes: float
+):
+    return (
+        public_transport_service.find_unlocked_one_transfer_connections(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id,
+            ready_time=ready_time,
+            baseline_travel_time_minutes=
+                baseline_travel_time_minutes,
+            alternative_travel_time_minutes=
+                alternative_travel_time_minutes
+        )
+    )

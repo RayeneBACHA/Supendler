@@ -598,3 +598,137 @@ class PublicTransportService:
                     })
 
         return connections
+
+    def evaluate_one_transfer_connection_access(
+        self,
+        from_stop_id: int,
+        to_stop_id: int,
+        ready_time: str,
+        travel_time_minutes: float,
+        safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+
+        connections = self.find_one_transfer_connections(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id
+        )
+
+        evaluated_connections = []
+
+        for connection in connections:
+
+            first_trip = connection["first_trip"]
+
+            # Can user reach the first PT departure in time?
+            catchable = self.can_catch_departure(
+                ready_time=ready_time,
+                travel_time_minutes=travel_time_minutes,
+                departure_time=first_trip["departure_time"],
+                safety_buffer_minutes=safety_buffer_minutes
+            )
+
+            # Latest time the user can start the access leg
+            # and still catch trip 1.
+            leave_by_time = self.time_service.calculate_leave_by_time(
+                departure_time=first_trip["departure_time"],
+                travel_time_minutes=travel_time_minutes,
+                safety_buffer_minutes=safety_buffer_minutes
+            )
+
+            ready_minutes = self.time_service.time_to_minutes(
+                ready_time
+            )
+
+            leave_by_minutes = self.time_service.time_to_minutes(
+                leave_by_time
+            )
+
+            wait_before_start_minutes = None
+
+            if catchable:
+                wait_before_start_minutes = max (
+                    0,
+                    leave_by_minutes - ready_minutes
+                )
+
+            evaluated_connections.append({
+                **connection,
+                "catchable": catchable,
+                "leave_by_time": leave_by_time,
+                "wait_before_start_minutes":
+                    wait_before_start_minutes
+            })
+
+        return evaluated_connections
+
+    def find_unlocked_one_transfer_connections(
+        self,
+        from_stop_id: int,
+        to_stop_id: int,
+        ready_time: str,
+        baseline_travel_time_minutes: float,
+        alternative_travel_time_minutes: float,
+        baseline_safety_buffer_minutes: float = 0,
+        alternative_safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+
+        # Helper Function 
+        def connection_key(connection: dict) -> tuple:
+                    return (
+                        connection["first_trip"]["trip_id"],
+                        connection["transfer_stop"]["stop_id"],
+                        connection["second_trip"]["trip_id"]
+                    )
+
+        # Evaluate the same transfer connections using walking/baseline access.
+        baseline_connections = self.evaluate_one_transfer_connection_access(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id,
+            ready_time=ready_time,
+            travel_time_minutes=baseline_travel_time_minutes,
+            safety_buffer_minutes=baseline_safety_buffer_minutes
+        )
+
+        # Evaluate them again using the faster alternative access mode.
+
+        alternative_connections = self.evaluate_one_transfer_connection_access(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id,
+            ready_time=ready_time,
+            travel_time_minutes=alternative_travel_time_minutes,
+            safety_buffer_minutes=alternative_safety_buffer_minutes
+        )
+
+        baseline_by_connection = {
+            connection_key(connection): connection
+            for connection in baseline_connections
+        }
+
+        unlocked_connections = []
+
+        for alternative_connection in alternative_connections:
+
+            key = connection_key(alternative_connection)
+
+            baseline_connection = baseline_by_connection[key]
+
+            if (
+                not baseline_connection["catchable"]
+                and alternative_connection["catchable"]
+            ):
+                unlocked_connections.append({
+                    **alternative_connection,
+                    "unlocks_connection": True,
+                    "baseline_access": {
+                        "catchable": baseline_connection["catchable"],
+                        "leave_by_time":
+                            baseline_connection["leave_by_time"],
+                        "wait_before_start_minutes":
+                            baseline_connection[
+                                "wait_before_start_minutes"
+                            ]
+                    }
+                })
+
+        return unlocked_connections
+        

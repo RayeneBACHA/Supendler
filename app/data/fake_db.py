@@ -71,6 +71,13 @@ trips = [
         "route_id": 1,
         "service_id": "weekday",
         "trip_headsign": "TU Lichtwiese"
+    },
+
+    {
+    "trip_id": 5,
+    "route_id": 2,
+    "service_id": "weekday",
+    "trip_headsign": "Darmstadt Nord"
     }
 ]
 
@@ -191,5 +198,25 @@ stop_times = [
         "stop_sequence": 4,
         "arrival_time": "12:57",
         "departure_time": "12:57"
+    },
+
+    # ============================================================
+    # Trip 3 - RB - Darmstadt Hbf -> Darmstadt Nord
+    # ============================================================
+
+    {
+    "trip_id": 5,
+    "stop_id": 1,
+    "arrival_time": "12:50",
+    "departure_time": "12:50",
+    "stop_sequence": 1
+    },
+    {
+    "trip_id": 5,
+    "stop_id": 5,
+    "arrival_time": "12:55",
+    "departure_time": "12:55",
+    "stop_sequence": 2
     }
+
 ]
