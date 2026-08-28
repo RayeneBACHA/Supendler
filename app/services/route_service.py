@@ -403,6 +403,72 @@ class RouteService:
                     )
                 )
 
+        # ------------------------------------------------------------
+        # 7. Shared_mobility access for one-transfer PT
+        # ------------------------------------------------------------
+        
+        for shared_access in shared_access_options:
+
+            unlocked_transfer_connections = (
+                self.public_transport_service
+                .find_unlocked_one_transfer_connections(
+                    from_stop_id=request.stop_pair.start_stop_id,
+                    to_stop_id=request.stop_pair.end_stop_id,
+                    ready_time=request.journey.ready_time,
+                    baseline_travel_time_minutes=
+                        walking_access["time_minutes"],
+                    alternative_travel_time_minutes=
+                        shared_access["time_minutes"]
+                )
+            )
+
+            for connection in unlocked_transfer_connections:
+
+                routes.append(
+                    self._create_public_transport_transfer_route(
+                        access_option=shared_access,
+                        connection=connection,
+                        egress_option=walking_egress,
+                        profile=RouteProfile.pt_shared,
+                        leave_by_time=connection["leave_by_time"],
+                        wait_before_start_minutes=connection[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit="unlocks_connection"
+                    )
+                )
+
+        # ------------------------------------------------------------
+        # 8. Shared-mobility egress for one-transfer PT
+        # ------------------------------------------------------------
+
+        for shared_egress in shared_egress_options:
+            final_arrival_gain_minutes = (
+                walking_egress["time_minutes"]
+                - shared_egress["time_minutes"]
+            )
+
+            if (
+                final_arrival_gain_minutes
+                < self.MIN_SHARED_FINAL_ARRIVAL_GAIN_MINUTES
+            ):
+                continue
+
+            for connection in catchable_walking_transfer_connections:
+
+                routes.append(
+                    self._create_public_transport_transfer_route(
+                        access_option=walking_access,
+                        connection=connection,
+                        egress_option=shared_egress,
+                        profile=RouteProfile.pt_shared,
+                        leave_by_time=connection["leave_by_time"],
+                        wait_before_start_minutes=connection[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit = "faster_arrival"
+                    )
+                )
         return routes
 
 
