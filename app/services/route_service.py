@@ -298,6 +298,111 @@ class RouteService:
                     )
                 )
 
+        # ------------------------------------------------------------
+        # 5. One-transfer walking baseline
+        # ------------------------------------------------------------
+
+        walking_transfer_connections = (
+            self.public_transport_service
+            .evaluate_one_transfer_connection_access(
+                from_stop_id=request.stop_pair.start_stop_id,
+                to_stop_id=request.stop_pair.end_stop_id,
+                ready_time=request.journey.ready_time,
+                travel_time_minutes=walking_access["time_minutes"]
+            )
+        )
+
+        catchable_walking_transfer_connections = [
+            connection 
+            for connection in walking_transfer_connections
+            if connection["catchable"]
+        ]
+
+        for connection in catchable_walking_transfer_connections:
+
+            routes.append(
+                self._create_public_transport_transfer_route(
+                    access_option=walking_access,
+                    connection=connection,
+                    egress_option=walking_egress,
+                    profile=RouteProfile.pt_walk,
+                    leave_by_time=connection["leave_by_time"],
+                    wait_before_start_minutes=connection[
+                        "wait_before_start_minutes"
+                    ]
+                )
+            )
+
+
+        # ------------------------------------------------------------
+        # 6. folding_bike one-transfer PT
+        # ------------------------------------------------------------
+
+        if request.user.has_folding_bike:
+
+            folding_transfer_connections = (
+                self.public_transport_service
+                .evaluate_one_transfer_connection_access(
+                    from_stop_id=request.stop_pair.start_stop_id,
+                    to_stop_id=request.stop_pair.end_stop_id,
+                    ready_time=request.journey.ready_time,
+                    travel_time_minutes=
+                        folding_bike_access["time_minutes"]
+                )
+            )
+
+            unlocked_folding_bike_connections = (
+                self.public_transport_service
+                .find_unlocked_one_transfer_connections(
+                    from_stop_id=request.stop_pair.start_stop_id,
+                    to_stop_id=request.stop_pair.end_stop_id,
+                    ready_time=request.journey.ready_time,
+                    baseline_travel_time_minutes=
+                        walking_access["time_minutes"],
+                    alternative_travel_time_minutes=
+                        folding_bike_access["time_minutes"]
+                )
+            )
+
+            unlocked_connection_keys = {
+                (
+                    connection["first_trip"]["trip_id"],
+                    connection["transfer_stop"]["stop_id"],
+                    connection["second_trip"]["trip_id"]
+                )
+                for connection in unlocked_folding_bike_connections
+            }
+
+            for connection in folding_transfer_connections:
+
+                if not connection["catchable"]:
+                    continue
+
+                connection_key = (
+                    connection["first_trip"]["trip_id"],
+                    connection["transfer_stop"]["stop_id"],
+                    connection["second_trip"]["trip_id"]
+                )
+
+                benefit = None
+
+                if connection_key in unlocked_connection_keys:
+                    benefit = "unlocks_connection"
+
+                routes.append(
+                    self._create_public_transport_transfer_route(
+                        access_option=folding_bike_access,
+                        connection=connection,
+                        egress_option=folding_bike_egress,
+                        profile=RouteProfile.pt_folding_bike,
+                        leave_by_time=connection["leave_by_time"],
+                        wait_before_start_minutes=connection[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit=benefit
+                    )
+                )
+
         return routes
 
 
@@ -445,4 +550,105 @@ class RouteService:
             }
         ]
 
-    
+
+    def _create_transfer_leg(
+        self,
+        connection: dict,
+    ) -> dict:
+
+        transfer_stop = connection["transfer_stop"]
+
+        return {
+            "leg_type": "transfer",
+            "stop_id": transfer_stop["stop_id"],
+            "stop_name": transfer_stop["stop_name"],
+            "total_time_minutes":
+                connection["total_transfer_time_minutes"],
+            "walk_time_minutes":
+                connection["walk_transfer_time_minutes"]
+        }
+
+
+    def _create_public_transport_transfer_route(
+        self,
+        access_option: dict,
+        connection: dict,
+        egress_option: dict,
+        profile: RouteProfile,
+        leave_by_time: str | None = None,
+        wait_before_start_minutes: float | None = None,
+        benefit: str | None = None
+    ) -> dict:
+        first_trip = connection["first_trip"]
+        second_trip = connection["second_trip"]
+
+        access_leg = self._create_mobility_leg(
+            access_option
+        )
+
+        first_pt_leg = {
+            "leg_type": "public_transport",
+            "trip_id": first_trip["trip_id"],
+            "line": first_trip["line"],
+            "line_type": first_trip["line_type"],
+            "destination": first_trip["destination"],
+            "departure_time": first_trip["departure_time"],
+            "arrival_time": first_trip["arrival_time"],
+            "duration_minutes": first_trip["duration_minutes"],
+            "stops": first_trip["stops"]
+        }
+
+        transfer_leg = self._create_transfer_leg(
+            connection
+        )
+
+        second_pt_leg = {
+            "leg_type": "public_transport",
+            "trip_id": second_trip["trip_id"],
+            "line": second_trip["line"],
+            "line_type": second_trip["line_type"],
+            "destination": second_trip["destination"],
+            "departure_time": second_trip["departure_time"],
+            "arrival_time": second_trip["arrival_time"],
+            "duration_minutes": second_trip["duration_minutes"],
+            "stops": second_trip["stops"]
+        }
+
+        egress_leg = self._create_mobility_leg(
+            egress_option
+        )
+
+        total_time = (
+            access_option["time_minutes"]
+            + first_trip["duration_minutes"]
+            + connection["total_transfer_time_minutes"]
+            + second_trip["duration_minutes"]
+            + egress_option["time_minutes"]
+        )
+
+
+        return {
+            "route_type": "public_transport_combo",
+            "profile": profile,
+            "total_time_minutes": round(total_time, 1),
+            "modes": [
+                access_option["mode"],
+                first_trip["line_type"],
+                second_trip["line_type"],
+                egress_option["mode"]
+            ],
+            "leave_by_time": leave_by_time,
+            "wait_before_start_minutes":
+                wait_before_start_minutes,
+            "benefit": benefit,
+            "legs": [
+                access_leg,
+                first_pt_leg,
+                transfer_leg,
+                second_pt_leg,
+                egress_leg
+            ]
+        }
+
+
+        

@@ -89,7 +89,9 @@ class RouteOption(BaseModel):
     
 
     legs: list[
-        MobilityLeg | PublicTransportLeg
+        MobilityLeg 
+        | PublicTransportLeg
+        | TransferLeg
     ]
 
 class RouteOptionsResponse(BaseModel):
@@ -100,3 +102,12 @@ class RouteOptionsResponse(BaseModel):
 
     fastest_option: RouteOption
     options: list[RouteOption]
+
+class TransferLeg(BaseModel):
+    leg_type: Literal["transfer"]
+
+    stop_id: int
+    stop_name: str
+
+    total_time_minutes: float
+    walk_time_minutes: float
