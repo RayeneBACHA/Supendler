@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.time_service import TimeService
 
-from app.data.fake_db import stops, routes, trips, stop_times
+from app.data.fake_db import stops, routes, trips, stop_times, transfer_links
 from app.services.public_transport_service import PublicTransportService
 
 router = APIRouter(tags=["public transport"])
@@ -12,6 +12,7 @@ public_transport_service = PublicTransportService(
     stops=stops,
     routes=routes,
     trips=trips,
+    transfer_links=transfer_links,
     stop_times=stop_times,
     time_service=time_service
 )
@@ -91,5 +92,18 @@ def get_unlocked_transfer_connections(
                 baseline_travel_time_minutes,
             alternative_travel_time_minutes=
                 alternative_travel_time_minutes
+        )
+    )
+
+@router.get("/trips/transfers/inter-stop")
+def get_inter_stop_transfer_connections(
+    from_stop_id: int,
+    to_stop_id: int
+):
+    return (
+        public_transport_service
+        .find_inter_stop_transfer_connections(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id
         )
     )

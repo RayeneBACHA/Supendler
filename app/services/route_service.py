@@ -6,6 +6,7 @@ from app.schemas.route_response import RouteProfile
 class RouteService:
 
     MIN_SHARED_FINAL_ARRIVAL_GAIN_MINUTES = 10
+    MIN_UNLOCKED_CONNECTION_FINAL_ARRIVAL_GAIN_MINUTES = 20
 
     def __init__(
         self,
@@ -469,6 +470,88 @@ class RouteService:
                         benefit = "faster_arrival"
                     )
                 )
+
+        # ------------------------------------------------------------
+        # 9. Folding_bike inter-stop transfer
+        # ------------------------------------------------------------
+        #
+        # Recommend this profile only when:
+        #
+        # - the user can catch PT1;
+        # - walking cannot make the transfer between the two stops;
+        # - the folding bike can make it;
+        # - and the unlocked connection either has no normal PT alternative
+        #   or improves final arrival by at least the configured threshold.
+        #
+        # This is the core "mobility unlocks a PT connection" use case.
+        
+        if request.user.has_folding_bike:
+
+            inter_stop_connections = (
+                self.public_transport_service
+                .evaluate_inter_stop_transfer_access(
+                    from_stop_id=request.stop_pair.start_stop_id,
+                    to_stop_id=request.stop_pair.end_stop_id,
+                    ready_time=request.journey.ready_time,
+                    travel_time_minutes=
+                        folding_bike_access["time_minutes"]
+                )
+            )
+
+            for connection in inter_stop_connections:
+
+                # Folding bike must first be able to reach PT1.
+                if not connection["catchable"]:
+                    continue
+
+                # For this profile we're interested in connections
+                # that walking cannot make during the transfer.
+                if connection["walk_transfer_catchable"]:
+                    continue
+
+                # Folding bike must make the transfer in time.
+                if not connection["folding_bike_transfer_catchable"]:
+                    continue
+
+                final_arrival_gain_minutes = (
+                    connection["final_arrival_gain_minutes"]
+                )
+
+                # If normal PT can already reach the destination,
+                # the mobility-unlocked route must meaningfully beat it.
+                if (
+                    final_arrival_gain_minutes is not None
+                    and final_arrival_gain_minutes
+                    < self.MIN_UNLOCKED_CONNECTION_FINAL_ARRIVAL_GAIN_MINUTES
+                ):
+                    continue
+
+                inter_stop_transfer_leg = (
+                    self._create_inter_stop_transfer_leg(
+                        connection=connection,
+                        mode="bike",
+                        source="folding_bike",
+                        travel_time_minutes=connection[
+                            "folding_bike_transfer_time_minutes"
+                        ]
+                    )
+                )
+
+                routes.append(
+                    self._create_public_transport_transfer_route(
+                        access_option=folding_bike_access,
+                        connection=connection,
+                        egress_option=folding_bike_egress,
+                        profile=RouteProfile.pt_folding_bike,
+                        leave_by_time=connection["leave_by_time"],
+                        wait_before_start_minutes= connection[
+                            "wait_before_start_minutes"
+                        ],
+                        benefit="unlocks_connection",
+                        transfer_leg=inter_stop_transfer_leg
+                    )
+                )
+
         return routes
 
 
@@ -634,6 +717,37 @@ class RouteService:
                 connection["walk_transfer_time_minutes"]
         }
 
+    def _create_inter_stop_transfer_leg(
+        self,
+        connection: dict,
+        mode: str,
+        source: str,
+        travel_time_minutes: float
+    ) -> dict:
+
+        transfer_from_stop = connection["transfer_from_stop"]
+        transfer_to_stop = connection["transfer_to_stop"]
+
+        return {
+            "leg_type": "inter_stop_transfer",
+
+            "from_stop_id": transfer_from_stop["stop_id"],
+            "from_stop_name": transfer_from_stop["stop_name"],
+
+            "to_stop_id": transfer_to_stop["stop_id"],
+            "to_stop_name": transfer_to_stop["stop_name"],
+
+            "mode": mode,
+            "source": source,
+
+            "travel_time_minutes": travel_time_minutes,
+
+            # Full timetable gap:
+            # PT1 arrival -> PT2 departure
+            "total_time_minutes":
+                connection["total_transfer_time_minutes"]
+        }
+
 
     def _create_public_transport_transfer_route(
         self,
@@ -643,7 +757,8 @@ class RouteService:
         profile: RouteProfile,
         leave_by_time: str | None = None,
         wait_before_start_minutes: float | None = None,
-        benefit: str | None = None
+        benefit: str | None = None,
+        transfer_leg: dict | None = None
     ) -> dict:
         first_trip = connection["first_trip"]
         second_trip = connection["second_trip"]
@@ -664,9 +779,10 @@ class RouteService:
             "stops": first_trip["stops"]
         }
 
-        transfer_leg = self._create_transfer_leg(
-            connection
-        )
+        if transfer_leg is None:
+            transfer_leg = self._create_transfer_leg(
+                connection
+            )
 
         second_pt_leg = {
             "leg_type": "public_transport",
@@ -692,17 +808,26 @@ class RouteService:
             + egress_option["time_minutes"]
         )
 
+        modes = [
+            access_option["mode"],
+            first_trip["line_type"]
+        ]
+
+        if transfer_leg["leg_type"] == "inter_stop_transfer":
+            modes.append(
+                transfer_leg["mode"]
+            )
+
+        modes.extend([
+            second_trip["line_type"],
+            egress_option["mode"]
+        ])
 
         return {
             "route_type": "public_transport_combo",
             "profile": profile,
             "total_time_minutes": round(total_time, 1),
-            "modes": [
-                access_option["mode"],
-                first_trip["line_type"],
-                second_trip["line_type"],
-                egress_option["mode"]
-            ],
+            "modes": modes,
             "leave_by_time": leave_by_time,
             "wait_before_start_minutes":
                 wait_before_start_minutes,

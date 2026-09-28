@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.data.fake_db import routes, stops, trips, stop_times
+from app.data.fake_db import routes, stops, trips, stop_times, transfer_links
 from app.schemas.route import RouteOptionsRequest
 from app.services.mobility_option_service import MobilityOptionService
 from app.services.public_transport_service import PublicTransportService
@@ -22,6 +22,7 @@ public_transport_service = PublicTransportService(
     routes=routes,
     trips=trips,
     stop_times=stop_times,
+    transfer_links=transfer_links,
     time_service=time_service
 )
 

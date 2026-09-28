@@ -41,6 +41,11 @@ routes = [
         "route_id": 2,
         "route_short_name": "RB",
         "route_type": "train"
+    },
+    {
+        "route_id": 3,
+        "route_short_name": "X",
+        "route_type": "bus"
     }
 ]
 
@@ -78,6 +83,12 @@ trips = [
     "route_id": 2,
     "service_id": "weekday",
     "trip_headsign": "Darmstadt Nord"
+    },
+    {
+        "trip_id": 6,
+        "route_id": 3,
+        "service_id": "weekday",
+        "trip_headsign": "Darmstadt Nord"
     }
 ]
 
@@ -217,6 +228,30 @@ stop_times = [
     "arrival_time": "12:55",
     "departure_time": "12:55",
     "stop_sequence": 2
+    },
+    {
+        "trip_id": 6,
+        "stop_id": 2,
+        "arrival_time": "12:51",
+        "departure_time": "12:51",
+        "stop_sequence": 1
+    },
+    {
+        "trip_id": 6,
+        "stop_id": 5,
+        "arrival_time": "13:01",
+        "departure_time": "13:01",
+        "stop_sequence": 2
     }
 
+]
+
+transfer_links = [
+    {
+        "from_stop_id": 1,
+        "to_stop_id": 2,
+
+        "walk_time_minutes": 8,
+        "folding_bike_time_minutes": 3 
+    }
 ]

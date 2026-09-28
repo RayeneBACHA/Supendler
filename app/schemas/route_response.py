@@ -92,6 +92,7 @@ class RouteOption(BaseModel):
         MobilityLeg 
         | PublicTransportLeg
         | TransferLeg
+        | InterStopTransferLeg
     ]
 
 class RouteOptionsResponse(BaseModel):
@@ -111,3 +112,18 @@ class TransferLeg(BaseModel):
 
     total_time_minutes: float
     walk_time_minutes: float
+
+class InterStopTransferLeg(BaseModel):
+    leg_type: Literal["inter_stop_transfer"] = "inter_stop_transfer"
+
+    from_stop_id: int
+    from_stop_name: str
+
+    to_stop_id: int
+    to_stop_name: str
+
+    mode: TransportMode
+    source: str
+
+    travel_time_minutes: float = Field(ge=0)
+    total_time_minutes: float = Field(ge=0)

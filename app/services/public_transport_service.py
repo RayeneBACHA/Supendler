@@ -4,6 +4,7 @@ class PublicTransportService:
 
     SAME_STOP_TRANSFER_WALK_MINUTES = 1
     MIN_TRANSFER_ARRIVAL_GAIN_MINUTES = 5
+    FOLDING_BIKE_TRANSFER_BUFFER_MINUTES = 1
     
     def __init__(
         self,
@@ -11,12 +12,14 @@ class PublicTransportService:
         routes: list[dict],
         trips: list[dict],
         stop_times: list[dict],
+        transfer_links: list[dict],
         time_service: TimeService
     ):
         self.stops = stops
         self.routes = routes
         self.trips = trips
         self.stop_times = stop_times
+        self.transfer_links = transfer_links
         self.time_service = time_service
 
     def get_all_trips(self):
@@ -589,8 +592,14 @@ class PublicTransportService:
 
                     connections.append({
                         "first_trip": first_trip,
+
                         "transfer_stop": transfer_stop,
+
+                        "transfer_from_stop": transfer_stop,
+                        "transfer_to_stop": transfer_stop,
+
                         "second_trip":  second_trip,
+                        
                         "total_transfer_time_minutes":
                             total_transfer_time_minutes,
                         "walk_transfer_time_minutes":
@@ -599,6 +608,367 @@ class PublicTransportService:
 
         return connections
 
+    def _find_best_normal_continuation_arrival_minutes(
+        self,
+        first_trip_id: int,
+        from_stop_id: int,
+        to_stop_id: int
+    ) -> int | None:
+        """
+        Find the earliest arrival at the final PT stop that is possible
+        without leaving the normal path of PT1.
+
+        Starting from the user's boarding stop, inspect every upcoming
+        stop of PT1 and consider:
+
+        1. staying on PT1 if it reaches the destination;
+        2. making a normal same-stop transfer to another trip.
+
+        This result is used as the baseline when deciding whether an
+        inter-stop mobility transfer provides a meaningful advantage.
+        """
+
+        origin_stop_time = self.get_stop_time_for_trip_at_stop(
+            trip_id=first_trip_id,
+            stop_id=from_stop_id
+        )
+
+        if origin_stop_time is None:
+            return None
+
+        stop_times = self.get_stop_times_for_trip(
+            first_trip_id
+        )
+
+        best_arrival_minutes = None
+
+        for stop_time in stop_times:
+
+            # Only stations that come after where the user boarded PT1.
+            if (
+                stop_time["stop_sequence"]
+                <= origin_stop_time["stop_sequence"]
+            ):
+                continue
+
+            current_stop_id = stop_time["stop_id"]
+
+            first_trip_arrival_minutes = (
+                self.time_service.time_to_minutes(
+                    stop_time["arrival_time"]
+                )
+            )
+
+            # ---------------------------------------------------------
+            # PT1 itself reaches the final PT stop.
+            # ---------------------------------------------------------
+
+            if current_stop_id == to_stop_id:
+
+                if (
+                    best_arrival_minutes is None
+                    or first_trip_arrival_minutes
+                    < best_arrival_minutes
+                ):
+                    best_arrival_minutes = first_trip_arrival_minutes
+
+                continue
+
+            # ---------------------------------------------------------
+            # Can we leave PT1 here and take another normal PT trip
+            # from THIS SAME stop to the final stop?
+            # ---------------------------------------------------------
+
+            onward_trips = self.find_direct_trips(
+                from_stop_id=current_stop_id,
+                to_stop_id=to_stop_id
+            )
+
+            for onward_trip in onward_trips:
+
+                if onward_trip["trip_id"] == first_trip_id:
+                    continue
+
+                onward_departure_minutes = (
+                    self.time_service.time_to_minutes(
+                        onward_trip["departure_time"]
+                    )
+                )
+
+                available_transfer_time = (
+                    onward_departure_minutes
+                    - first_trip_arrival_minutes
+                )
+
+                if (
+                    available_transfer_time
+                    < self.SAME_STOP_TRANSFER_WALK_MINUTES
+                ):
+                    continue
+
+                onward_arrival_minutes = (
+                    self.time_service.time_to_minutes(
+                        onward_trip["arrival_time"]
+                    )
+                )
+
+                if (
+                    best_arrival_minutes is None
+                    or onward_arrival_minutes
+                    < best_arrival_minutes
+                ):
+                    best_arrival_minutes = onward_arrival_minutes
+
+        
+        return best_arrival_minutes
+
+    def find_inter_stop_transfer_connections(
+        self,
+        from_stop_id: int,
+        to_stop_id: int
+    ) -> list[dict]:
+        """
+        Find PT connections that require moving between two different stops.
+
+        Search is PT-path-first:
+
+        1. Start with a PT trip the user can board at the origin.
+        2. Inspect its upcoming stops.
+        3. Determine the best normal PT continuation toward the destination.
+        4. Look for transfer links from those upcoming stops to nearby stops.
+        5. Find PT trips from the linked stop to the destination.
+        6. Record whether walking or folding bike can make the transfer.
+
+        The normal continuation is kept as a baseline so RouteService can
+        later decide whether the mobility-assisted transfer saves enough
+        final-arrival time to be worth recommending.
+        """
+
+        connections = []
+
+        # ------------------------------------------------------------
+        # Start with PT1, not with transfer links.
+        # ------------------------------------------------------------
+        
+        first_trip_ids = {
+            trip["trip_id"]
+            for trip in self.get_stop_times_for_trip(from_stop_id)
+        }
+
+        for first_trip_id in first_trip_ids:
+
+            origin_stop_time = (
+                self.get_stop_time_for_trip_at_stop(
+                    trip_id=first_trip_id,
+                    stop_id=from_stop_id
+                )
+            )
+
+            if origin_stop_time is None:
+                continue
+
+            first_trip_stop_times = (
+                self.get_stop_times_for_trip(
+                    first_trip_id
+                )
+            )
+
+            # Stops that are actually ahead of the user on PT1.
+            upcoming_stop_ids = {
+                stop_time["stop_id"]
+                for stop_time in first_trip_stop_times
+                if (
+                    stop_time["stop_sequence"]
+                    > origin_stop_time["stop_sequence"]
+                )
+            }
+
+            if not upcoming_stop_ids:
+                continue
+
+            # Before inventing an inter-stop transfer, find out
+            # how early normal PT can already reach the destination.
+            best_normal_arrival_minutes = (
+                self._find_best_normal_continuation_arrival_minutes(
+                    first_trip_id=first_trip_id,
+                    from_stop_id=from_stop_id,
+                    to_stop_id=to_stop_id
+                )
+            )
+
+            # --------------------------------------------------------
+            # Only now inspect mobility links from upcoming PT1 stops.
+            # --------------------------------------------------------
+
+            for transfer_link in self.transfer_links:
+
+                transfer_from_stop_id = (
+                    transfer_link["from_stop_id"]
+                )
+
+                transfer_to_stop_id = (
+                    transfer_link["to_stop_id"]
+                )
+
+            # We can only start this transfer from a stop
+            # that PT1 actually reaches after the origin.
+            if transfer_from_stop_id not in upcoming_stop_ids:
+                continue
+
+            transfer_from_stop = self.get_stop_by_id(
+                transfer_from_stop_id
+            )
+
+            transfer_to_stop = self.get_stop_by_id(
+                transfer_to_stop_id
+            )
+
+            if (
+                transfer_from_stop is None
+                or transfer_to_stop is None
+            ):
+                continue
+
+            # Build the PT1 section:
+            # origin -> transfer_from_stop
+            first_trip_candidates = self.find_direct_trips(
+                from_stop_id=from_stop_id,
+                to_stop_id=transfer_from_stop_id
+            )
+
+            first_trip = next(
+                (
+                    trip
+                    for trip in first_trip_candidates
+                    if trip["trip_id"] == first_trip_id
+                ),
+                None
+            )
+
+            if first_trip is None:
+                continue
+
+            # PT2 after the inter-stop movement.
+            second_trips = self.find_direct_trips(
+                from_stop_id=transfer_to_stop_id,
+                to_stop_id=to_stop_id
+            )
+
+            for second_trip in second_trips:
+
+                if (
+                    first_trip["trip_id"]
+                    == second_trip["trip_id"]
+                ):
+                    continue
+
+                first_arrival = (
+                    self.time_service.time_to_minutes(
+                        first_trip["arrival_time"]
+                    )
+                )
+
+                second_departure = (
+                    self.time_service.time_to_minutes(
+                        second_trip["departure_time"]
+                    )
+                )
+
+                total_transfer_time_minutes = (
+                    second_departure
+                    - first_arrival
+                )
+
+                if total_transfer_time_minutes <= 0:
+                    continue
+
+                walk_transfer_time_minutes = (
+                    transfer_link["walk_time_minutes"]
+                )
+
+                folding_bike_transfer_time_minutes = (
+                    transfer_link[
+                        "folding_bike_time_minutes"
+                    ]
+                    + self.FOLDING_BIKE_TRANSFER_BUFFER_MINUTES
+                )
+
+                inter_stop_arrival_minutes = (
+                    self.time_service.time_to_minutes(
+                        second_trip["arrival_time"]
+                    )
+                )
+
+                final_arrival_gain_minutes = None
+
+                if best_normal_arrival_minutes is not None:
+                    final_arrival_gain_minutes = (
+                        best_normal_arrival_minutes
+                        - inter_stop_arrival_minutes
+                    )
+
+                connections.append({
+                    "first_trip": first_trip,
+
+                    "transfer_from_stop":
+                        transfer_from_stop,
+
+                    "transfer_to_stop":
+                        transfer_to_stop,
+
+                    "second_trip": second_trip,
+
+                    "total_transfer_time_minutes":
+                        total_transfer_time_minutes,
+
+                    "walk_transfer_time_minutes":
+                        walk_transfer_time_minutes,
+
+                    "folding_bike_transfer_time_minutes":
+                        folding_bike_transfer_time_minutes,
+
+                    "walk_transfer_catchable": (
+                        walk_transfer_time_minutes
+                        <= total_transfer_time_minutes
+                    ),
+
+                    "folding_bike_transfer_catchable": (
+                        folding_bike_transfer_time_minutes
+                        <= total_transfer_time_minutes
+                    ),
+
+                    "best_normal_arrival_time": (
+                        None
+                        if best_normal_arrival_minutes is None
+                        else self.time_service.minutes_to_time(
+                            best_normal_arrival_minutes
+                        )
+                    ),
+
+                    "final_arrival_gain_minutes":
+                        final_arrival_gain_minutes
+                })
+
+
+        return connections
+
+    def get_transfer_link(
+        self,
+        from_stop_id: int,
+        to_stop_id: int
+    ) -> dict | None:
+
+        for link in self.transfer_links:
+                
+            if (
+                link["from_stop_id"] == from_stop_id
+                and link["to_stop_id"] == to_stop_id
+            ):
+                return link
+
+        return None
+
+            
     def evaluate_one_transfer_connection_access(
         self,
         from_stop_id: int,
@@ -613,13 +983,56 @@ class PublicTransportService:
             to_stop_id=to_stop_id
         )
 
+        return self._evaluate_transfer_connections_access(
+            connections=connections,
+            ready_time=ready_time,
+            travel_time_minutes=travel_time_minutes,
+            safety_buffer_minutes=safety_buffer_minutes
+        )
+
+
+    def evaluate_inter_stop_transfer_access(
+        self,
+        from_stop_id: int,
+        to_stop_id: int,
+        ready_time: str,
+        travel_time_minutes: float,
+        safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+
+        connections = self.find_inter_stop_transfer_connections(
+            from_stop_id=from_stop_id,
+            to_stop_id=to_stop_id
+        )
+
+        return self._evaluate_transfer_connections_access(
+            connections=connections,
+            ready_time=ready_time,
+            travel_time_minutes=travel_time_minutes,
+            safety_buffer_minutes=safety_buffer_minutes
+        )
+
+    def _evaluate_transfer_connections_access(
+        self,
+        connections: list[dict],
+        ready_time: str,
+        travel_time_minutes: float,
+        safety_buffer_minutes: float = 0
+    ) -> list[dict]:
+        """
+        Evaluate whether the user can reach PT1 in time.
+
+        This logic is shared by same-stop and inter-stop transfer
+        connections because the type of later transfer does not affect
+        whether the first PT departure is catchable.
+        """
+
         evaluated_connections = []
 
         for connection in connections:
 
             first_trip = connection["first_trip"]
 
-            # Can user reach the first PT departure in time?
             catchable = self.can_catch_departure(
                 ready_time=ready_time,
                 travel_time_minutes=travel_time_minutes,
@@ -627,12 +1040,12 @@ class PublicTransportService:
                 safety_buffer_minutes=safety_buffer_minutes
             )
 
-            # Latest time the user can start the access leg
-            # and still catch trip 1.
-            leave_by_time = self.time_service.calculate_leave_by_time(
-                departure_time=first_trip["departure_time"],
-                travel_time_minutes=travel_time_minutes,
-                safety_buffer_minutes=safety_buffer_minutes
+            leave_by_time = (
+                self.time_service.calculate_leave_by_time(
+                    departure_time=first_trip["departure_time"],
+                    travel_time_minutes=travel_time_minutes,
+                    safety_buffer_minutes=safety_buffer_minutes
+                )
             )
 
             ready_minutes = self.time_service.time_to_minutes(
@@ -646,7 +1059,7 @@ class PublicTransportService:
             wait_before_start_minutes = None
 
             if catchable:
-                wait_before_start_minutes = max (
+                wait_before_start_minutes = max(
                     0,
                     leave_by_minutes - ready_minutes
                 )
