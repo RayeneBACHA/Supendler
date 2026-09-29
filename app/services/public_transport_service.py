@@ -752,7 +752,7 @@ class PublicTransportService:
         
         first_trip_ids = {
             trip["trip_id"]
-            for trip in self.get_stop_times_for_trip(from_stop_id)
+            for trip in self.get_trips_for_stop(from_stop_id)
         }
 
         for first_trip_id in first_trip_ids:
