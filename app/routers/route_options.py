@@ -1,25 +1,29 @@
 from fastapi import APIRouter, HTTPException
 
-from app.data.fake_db import lines, stations, trip_stops, trips
+from app.data.fake_db import routes, stops, trips, stop_times, transfer_links
 from app.schemas.route import RouteOptionsRequest
 from app.services.mobility_option_service import MobilityOptionService
 from app.services.public_transport_service import PublicTransportService
 from app.services.route_service import RouteService
 from app.services.transport_service import TransportService
 from app.schemas.route_response import RouteOptionsResponse
+from app.services.time_service import TimeService
 
 router = APIRouter(tags=["route options"])
 transport_service = TransportService()
+time_service = TimeService()
 
 mobility_option_service = MobilityOptionService(
     transport_service=transport_service
 )
 
 public_transport_service = PublicTransportService(
-    stations=stations,
-    lines=lines,
+    stops=stops,
+    routes=routes,
     trips=trips,
-    trip_stops=trip_stops
+    stop_times=stop_times,
+    transfer_links=transfer_links,
+    time_service=time_service
 )
 
 route_service = RouteService(
@@ -33,30 +37,41 @@ route_service = RouteService(
     response_model=RouteOptionsResponse
 )
 def get_route_options(request: RouteOptionsRequest):
-    start_station = public_transport_service.get_station_by_id(
-        request.station_pair.start_station_id
+    
+    start_stop = public_transport_service.get_stop_by_id(
+        request.stop_pair.start_stop_id
     )
 
-    if start_station is None:
+    if start_stop is None:
         raise HTTPException(
             status_code=404,
-            detail="Start station not found"
+            detail="Start stop not found"
         )
 
-    end_station = public_transport_service.get_station_by_id(
-            request.station_pair.end_station_id
+    end_stop = public_transport_service.get_stop_by_id(
+            request.stop_pair.end_stop_id
         )
     
-    if end_station is None:
+    if end_stop is None:
         raise HTTPException(
             status_code=404,
-            detail="End station not found"
+            detail="End stop not found"
         )
 
     result = route_service.generate_route_options(request)
 
     return {
-        "start_station": start_station,
-        "end_station": end_station,
+        "start_stop": {
+            "id": start_stop["stop_id"],
+            "name": start_stop["stop_name"],
+            "city": start_stop["city"]
+        },
+
+        "end_stop": {
+            "id": end_stop["stop_id"],
+            "name": end_stop["stop_name"],
+            "city": end_stop["city"]
+        },
+
         **result
     }

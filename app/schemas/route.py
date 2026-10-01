@@ -6,14 +6,14 @@ class SegmentRole(str, Enum):
     access = "access"
     egress = "egress"
 
-class StationPair(BaseModel):
-    start_station_id: int = Field(gt=0)
-    end_station_id: int = Field(gt=0)
+class StopPair(BaseModel):
+    start_stop_id: int = Field(gt=0)
+    end_stop_id: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def stations_must_be_different(self):
-        if self.start_station_id == self.end_station_id:
-            raise ValueError("Start station and end station must be different")
+    def stops_must_be_different(self):
+        if self.start_stop_id == self.end_stop_id:
+            raise ValueError("Start stop and end stop must be different")
 
         return self
 
@@ -114,10 +114,91 @@ class MobilitySegment(BaseModel):
     )
 
 
+class JourneyTime(BaseModel):
+    """
+    Describes when the user is ready to start the journey.
+    """
+
+    ready_time: str
+
+    @model_validator(mode="after")
+    def validate_departure_time(self):
+        try:
+            hours, minutes = map(
+                int,
+                self.ready_time.split(":")
+            )
+        except ValueError:
+            raise ValueError(
+                "ready_time must use HH:MM format"
+            )
+
+        if not 0 <= hours <= 23:
+            raise ValueError(
+                "Hour must be between 00 and 23"
+            )
+
+        if not 0 <= minutes <= 59:
+            raise ValueError(
+                "Minute must be between 00 and 59"
+            )
+
+        return self
+
+
+    
 class RouteOptionsRequest(BaseModel):
-    station_pair: StationPair
+    journey: JourneyTime
+
+    stop_pair: StopPair
     user: UserMobility
 
     direct: MobilitySegment
     access: MobilitySegment
     egress: MobilitySegment
+
+    @model_validator(mode="after")
+    def validate_folding_bike_distances(self):
+
+        if self.user.has_folding_bike:
+
+            if self.direct.folding_bike_distance_km is None:
+                raise ValueError(
+                    "direct folding bike distance is required"
+                    "when has_folding_bike is true"
+                )
+
+            if self.access.folding_bike_distance_km is None:
+                            raise ValueError(
+                                "access folding bike distance is required"
+                                "when has_folding_bike is true"
+                            )
+
+            if self.egress.folding_bike_distance_km is None:
+                            raise ValueError(
+                                "egress folding bike distance is required"
+                                "when has_folding_bike is true"
+                            )
+
+        return self
+
+
+    @model_validator(mode="after")
+    def validate_walk_distances(self):
+
+        if self.direct.walk_distance_km is None:
+            raise ValueError(
+                "direct walk distance is required"
+            )
+
+        if self.access.walk_distance_km is None:
+            raise ValueError(
+                "access walk distance is required"
+            )
+
+        if self.egress.walk_distance_km is None:
+            raise ValueError(
+                    "egress walk distance is required"
+            )
+
+        return self

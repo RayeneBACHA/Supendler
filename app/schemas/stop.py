@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 
-class Station(BaseModel):
+class Stop(BaseModel):
     name: str
     city: str
 
-class StationResponse(Station):
+class StopResponse(Stop):
     id: int

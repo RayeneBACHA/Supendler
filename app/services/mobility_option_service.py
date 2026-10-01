@@ -187,7 +187,7 @@ class MobilityOptionService:
         return {
             "segment_role": segment_role.value,
             "mode": "bike",
-            "source": "shared",
+            "source": "shared_bike",
             "available_count": bike.available_count,
             "time_minutes": round(total_time, 1),
             "steps": [
@@ -279,7 +279,7 @@ class MobilityOptionService:
         return {
             "segment_role": segment_role.value,
             "mode": "scooter",
-            "source": "shared",
+            "source": "shared_scooter",
             "available_count": scooter.available_count,
             "battery_percent": scooter.battery_percent,
             "time_minutes": round(total_time, 1),
