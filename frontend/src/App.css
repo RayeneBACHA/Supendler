@@ -1,0 +1,14 @@
+main {
+  max-width: 600px;
+  margin: 60px auto;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+p {
+  font-size: 18px;
+}
