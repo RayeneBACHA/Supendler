@@ -14,6 +14,7 @@ function RouteSearchForm() {
   const [toStopId, setToStopId] = useState("");
   const [readyTime, setReadyTime] = useState("");
   const [hasFoldingBike, setHasFoldingBike] = useState(false);
+  const [routeData, setRouteData] = useState(null);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -63,83 +64,118 @@ function RouteSearchForm() {
 
     const data = await response.json();
 
-    console.log(data);
+    setRouteData(data);
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label>
-        From
+    <>
+        <form onSubmit={handleSubmit}>
+        <label>
+            From
 
-        <select
-          value={fromStopId}
-          onChange={(event) => {
-            setFromStopId(event.target.value);
-          }}
-        >
-          <option value="">Choose a stop</option>
-
-          {STOPS.map((stop) => (
-            <option
-              key={stop.id}
-              value={stop.id}
+            <select
+            value={fromStopId}
+            onChange={(event) => {
+                setFromStopId(event.target.value);
+            }}
             >
-              {stop.name}
-            </option>
-          ))}
-        </select>
-      </label>
+            <option value="">Choose a stop</option>
 
-      <label>
-        To
+            {STOPS.map((stop) => (
+                <option
+                key={stop.id}
+                value={stop.id}
+                >
+                {stop.name}
+                </option>
+            ))}
+            </select>
+        </label>
 
-        <select
-          value={toStopId}
-          onChange={(event) => {
-            setToStopId(event.target.value);
-          }}
-        >
-          <option value="">Choose a stop</option>
+        <label>
+            To
 
-          {STOPS.map((stop) => (
-            <option
-              key={stop.id}
-              value={stop.id}
+            <select
+            value={toStopId}
+            onChange={(event) => {
+                setToStopId(event.target.value);
+            }}
             >
-              {stop.name}
-            </option>
-          ))}
-        </select>
-      </label>
+            <option value="">Choose a stop</option>
 
-      <label>
-        Ready at
+            {STOPS.map((stop) => (
+                <option
+                key={stop.id}
+                value={stop.id}
+                >
+                {stop.name}
+                </option>
+            ))}
+            </select>
+        </label>
 
-        <input
-          type="time"
-          value={readyTime}
-          onChange={(event) => {
-            setReadyTime(event.target.value);
-          }}
-        />
-      </label>
+        <label>
+            Ready at
 
-      <label>
-        <input
-          type="checkbox"
-          checked={hasFoldingBike}
-          onChange={(event) => {
-            setHasFoldingBike(event.target.checked);
-          }}
-        />
+            <input
+            type="time"
+            value={readyTime}
+            onChange={(event) => {
+                setReadyTime(event.target.value);
+            }}
+            />
+        </label>
 
-        I have a folding bike
-      </label>
+        <label>
+            <input
+            type="checkbox"
+            checked={hasFoldingBike}
+            onChange={(event) => {
+                setHasFoldingBike(event.target.checked);
+            }}
+            />
 
-      <button type="submit">
-        Find routes
-      </button>
-    </form>
+            I have a folding bike
+        </label>
+
+        <button type="submit">
+            Find routes
+        </button>
+        </form>
+        
+        {routeData && (
+            <section>
+                <h2>Route Options</h2>
+
+                <p>
+                    {routeData.option_count} options
+                </p>
+
+                <p>
+                    From: {routeData.start_stop.name}
+                </p>
+
+                <p>
+                    To: {routeData.end_stop.name}
+                </p>
+
+                {routeData.options.map((option, index) => (
+                    <div key={index}>
+                        <h3>{option.profile}</h3>
+
+                        <p>
+                            {option.total_time_minutes} minutes
+                        </p>
+
+                        <p>
+                            Type: {option.route_type}
+                        </p>
+                    </div>
+                ))}
+            </section>
+        )}
+
+    </>
   );
 }
 
